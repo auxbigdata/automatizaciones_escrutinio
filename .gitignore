@@ -7,6 +7,15 @@ src/robots/__pycache__
 src/settings/__pycache__
 
 
+# LOGS Y ARCHVIOS DESCARGADOS
+
+#  Scraping
+resources/Scraping/archivos/*
+!resources/Scraping/archivos/.gitkeep
+
+resources/Scraping/logs/*
+!resources/Scraping/logs/.gitkeep
+
 # ENTORNO
 .env
 
