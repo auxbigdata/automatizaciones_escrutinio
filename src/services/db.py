@@ -26,3 +26,17 @@ def ejecutar_query(sql, params=None):
 
     finally:
         conn.close()  # Cierra la conexión
+
+# Ejecuta varias queries (sql, params) en UNA sola conexión/transacción. Si alguna falla, se hace rollback de todas.
+def ejecutar_transaccion(queries:list[tuple]):
+    try:
+        conn=get_connection()
+        with conn.cursor() as cur:
+            for sql, params in queries:
+                cur. execute(sql, params or ())
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        raise e
+    finally:
+        conn.close()

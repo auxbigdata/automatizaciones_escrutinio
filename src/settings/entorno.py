@@ -11,6 +11,7 @@ class Entorno(BaseSettings):
     DB_NAME: str
     DB_USER: str
     DB_PASS: str
+    WEBHOOK_DISCORD: str
 
 # Instancia global lista para ser importada
 env = Entorno()

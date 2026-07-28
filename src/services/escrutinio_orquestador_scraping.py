@@ -2,6 +2,8 @@ import time
 from src.services.db import ejecutar_query
 from src.services.escrutinio_consultas_bd import insertar_resultado_scraping
 from src.services.escrutinio_api import scraping_gane_norte_valle
+from src.services.escrutinio_respaldo_scraping import buscar_respaldo_secundario
+from src.services.utils_scraping import normalizar_texto, MAPEO_SIGNOS
 from src.services.escrutinio_html import (
     scraping_acertemos,
     scraping_perla_todo,
@@ -19,20 +21,15 @@ from src.services.escrutinio_html import (
 # Mínimo de fuentes que deben coincidir para validar el resultado
 MIN_FUENTES_COINCIDENTES = 3
 
+# Reintentos del ciclo completo (principal + respaldo) antes de omitir la lotería y esperar al próximo cron
+MAX_REINTENTOS_SIN_COINCIDENCIAS = 3
+
 
 def obtener_urls_scraping(log: object):
-    """
-    Consulta la tabla es_origenes_scraping y retorna
-    todas las URLs activas (estado = 1).
-
-    Retorna:
-    - (list, None)  → lista de URLs si encontró
-    - (None, str)   → None, mensaje si no encontró o falló
-    """
+    """Retorna las URLs activas (estado=1) de es_origenes_scraping. (list, None) o (None, mensaje) si falla."""
     try:
         log.info("Obteniendo URLs activas de es_origenes_scraping")
 
-        # Traemos solo las URLs activas (estado = 1)
         sql = """
             SELECT id, nombre_loteria, url, tipo
             FROM es_origenes_scraping
@@ -56,20 +53,7 @@ def obtener_urls_scraping(log: object):
 
 
 def ejecutar_scraping_por_url(nombre_loteria: str, nombre_fuente: str, url: str, log: object):
-    """
-    Decide qué función de scraping llamar según el nombre de la fuente.
-    Si se agrega una nueva URL al proyecto, solo se agrega su elif aquí.
-
-    Parámetros:
-    - nombre_loteria : lotería que estamos buscando
-    - nombre_fuente  : nombre de la fuente en es_origenes_scraping
-    - url            : URL a consultar
-    - log            : objeto de logs
-
-    Retorna:
-    - (dict, None)  → resultado si encontró
-    - (None, str)   → None, mensaje si no encontró o falló
-    """
+    """Llama la función de scraping según nombre_fuente (para una nueva fuente, agregar su elif aquí). Retorna (dict, None) o (None, mensaje)."""
     try:
         log.info(f"Ejecutando scraping en fuente: {nombre_fuente}")
 
@@ -112,11 +96,10 @@ def ejecutar_scraping_por_url(nombre_loteria: str, nombre_fuente: str, url: str,
             resultado, error = scraping_loti(nombre_loteria, url, log)
 
         else:
-            # Fuentes que aún no tienen función implementada las ignoramos
+            # Fuente sin función implementada
             log.info(f"Fuente '{nombre_fuente}' aún no tiene función implementada")
             return None, f"Fuente '{nombre_fuente}' no implementada"
 
-        # Log para ver qué trae cada fuente
         if resultado:
             log.info(f"Fuente '{nombre_fuente}' → numero={resultado.get('numero')} | quinta='{resultado.get('quinta', '')}' | signo='{resultado.get('signo', '')}'")
 
@@ -129,27 +112,12 @@ def ejecutar_scraping_por_url(nombre_loteria: str, nombre_fuente: str, url: str,
 
 
 def validar_coincidencias(resultados: list, log: object):
-    """
-    Valida los resultados en 3 niveles:
-    - Nivel 1: número (mínimo MIN_FUENTES_COINCIDENTES)
-    - Nivel 2: quinta (solo entre fuentes que la trajeron)
-    - Nivel 3: signo  (solo entre fuentes que lo trajeron)
-
-    Parámetros:
-    - resultados : lista de dicts con {"numero", "quinta", "signo", "fuente"}
-    - log        : objeto de logs
-
-    Retorna:
-    - (dict, None)  → resultado validado si pasó los 3 niveles
-    - (None, str)   → None, mensaje si no alcanzó las coincidencias
-    """
+    """Valida en 3 niveles: número (mínimo MIN_FUENTES_COINCIDENTES), quinta y signo (solo entre fuentes que los trajeron). Retorna (dict, None) o (None, mensaje)."""
     try:
         if not resultados:
             return None, "No hay resultados para comparar"
 
-        # -----------------------------------------------
         # NIVEL 1: Validar el número
-        # -----------------------------------------------
         conteo_numero = {}
         for r in resultados:
             num = r['numero']
@@ -163,13 +131,17 @@ def validar_coincidencias(resultados: list, log: object):
             conteo_numero[num]["cantidad"] += 1
             conteo_numero[num]["fuentes"].append(r["fuente"])
 
-            # Solo acumulamos quinta si la fuente la trajo
+            # Solo si la fuente trajo quinta: normalizamos y resolvemos sinónimos (ej. Escorpión=Escorpio)
             if r.get('quinta'):
-                conteo_numero[num]["quintas"].append(r['quinta'].upper().strip())
+                quinta_normalizada = normalizar_texto(r['quinta'])
+                quinta_final = MAPEO_SIGNOS.get(quinta_normalizada, quinta_normalizada)
+                conteo_numero[num]["quintas"].append(quinta_final)
 
             # Solo acumulamos signo si la fuente lo trajo
             if r.get('signo'):
-                conteo_numero[num]["signos"].append(r['signo'].upper().strip())
+                signo_normalizado = normalizar_texto(r['signo'])
+                signo_final = MAPEO_SIGNOS.get(signo_normalizado, signo_normalizado)
+                conteo_numero[num]["signos"].append(signo_final)
 
         # Buscamos el número con suficientes coincidencias
         numero_validado = None
@@ -187,10 +159,7 @@ def validar_coincidencias(resultados: list, log: object):
             log.info(f"Resultados obtenidos: {resultados}")
             return None, mensaje_error
 
-        # -----------------------------------------------
-        # NIVEL 2: Validar la quinta
-        # Solo si alguna fuente la trajo
-        # -----------------------------------------------
+        # NIVEL 2: Validar la quinta (solo si alguna fuente la trajo)
         quinta_final = ""
         if datos_numero["quintas"]:
             conteo_quintas = {}
@@ -208,10 +177,7 @@ def validar_coincidencias(resultados: list, log: object):
                 log.info(mensaje_error)
                 return None, mensaje_error
 
-        # -----------------------------------------------
-        # NIVEL 3: Validar el signo
-        # Solo si alguna fuente lo trajo
-        # -----------------------------------------------
+        # NIVEL 3: Validar el signo (solo si alguna fuente lo trajo)
         signo_final = ""
         if datos_numero["signos"]:
             conteo_signos = {}
@@ -250,19 +216,7 @@ def validar_coincidencias(resultados: list, log: object):
 
 
 def procesar_loterias(loterias: list, log: object):
-    """
-    Función principal del orquestador.
-    Recibe la lista de loterías a procesar y ejecuta
-    el flujo completo de scraping y validación para cada una.
-
-    Parámetros:
-    - loterias : lista de loterías encontradas por buscar_loterias_hora_actual
-    - log      : objeto de logs
-
-    Retorna:
-    - (list, None)  → lista de resultados validados si encontró
-    - (None, str)   → None, mensaje si no encontró o falló
-    """
+    """Orquesta scraping y validación completa para cada lotería en `loterias`. Retorna (list, None) o (None, mensaje)."""
     try:
         # PASO 1: obtenemos todas las URLs activas de la BD
         urls, error_urls = obtener_urls_scraping(log)
@@ -270,57 +224,129 @@ def procesar_loterias(loterias: list, log: object):
         if urls is None:
             return None, error_urls
 
-        # Lista donde guardamos los resultados validados de todas las loterías
         resultados_finales = []
 
         # PASO 2: procesamos cada lotería encontrada
         for loteria in loterias:
 
-            # Extraemos los datos de la lotería
             id_horario     = loteria[0]
             nombre_loteria = loteria[1]
 
             log.info(f"Iniciando scraping para: {nombre_loteria}")
 
-            # Array donde acumulamos los resultados de cada URL
-            resultados_acumulados = []
+            # PASO 3+4/CASO 1: intenta resultado validado (principal+respaldo); si no alcanza el mínimo, reintenta hasta MAX_REINTENTOS_SIN_COINCIDENCIAS veces
+            resultado_validado = None
 
-            # PASO 3: recorremos todas las URLs activas
-            for url_data in urls:
-                nombre_fuente = url_data[1]
-                url           = url_data[2]
+            #Este set vive fuera del for de reintentos: así, si el scraping
+            # principal validó algo pero el CASO 2 necesita volver a llamar
+            # al respaldo (para completar quinta/signo), sabemos qué URLs
+            # ya no repetir.
+            urls_ya_usadas_para_esta_loteria = set()
 
-                # Ejecutamos el scraping en esta URL
-                resultado, error = ejecutar_scraping_por_url(
-                    nombre_loteria,
-                    nombre_fuente,
-                    url,
+            for intento in range(MAX_REINTENTOS_SIN_COINCIDENCIAS + 1):
+                if intento > 0:
+                    log.info(
+                        f"{nombre_loteria}: reintento {intento}/{MAX_REINTENTOS_SIN_COINCIDENCIAS} "
+                        f"(scraping principal + respaldo)"
+                    )
+
+                resultados_acumulados = []
+
+                for url_data in urls:
+                    nombre_fuente = url_data[1]
+                    url           = url_data[2]
+
+                    resultado, error = ejecutar_scraping_por_url(
+                        nombre_loteria,
+                        nombre_fuente,
+                        url,
+                        log
+                    )
+
+                    # Si trajo resultado, lo acumulamos con numero/quinta/signo/fuente
+                    if resultado:
+                        resultados_acumulados.append({
+                            "numero": resultado["numero"],
+                            "quinta": resultado.get("quinta", ""),
+                            "signo" : resultado.get("signo", ""),
+                            "fuente": nombre_fuente
+                        })
+                        log.info(f"Fuentes acumuladas hasta ahora: {len(resultados_acumulados)}")
+
+                urls_ya_usadas_para_esta_loteria = set()
+
+                for r in resultados_acumulados:
+                    # buscamos dentro de las urls activas cuál fuente trajo este resultado
+                    for url_data in urls:
+                        if url_data[1] == r["fuente"]:
+                            urls_ya_usadas_para_esta_loteria.add(url_data[2])
+                            break
+
+                # Validamos número, quinta y signo
+                resultado_validado, error_validacion = validar_coincidencias(
+                    resultados_acumulados,
                     log
                 )
 
-                # Si esta URL tenía el resultado de hoy lo acumulamos
-                # guardamos numero, quinta, signo y fuente
-                if resultado:
-                    resultados_acumulados.append({
-                        "numero": resultado["numero"],
-                        "quinta": resultado.get("quinta", ""),
-                        "signo" : resultado.get("signo", ""),
-                        "fuente": nombre_fuente
-                    })
-                    log.info(f"Fuentes acumuladas hasta ahora: {len(resultados_acumulados)}")
+                # CASO 1: si el principal no validó ningún número, se dispara el scraping de respaldo para esta lotería
+                if resultado_validado is None:
+                    log.info(f"{nombre_loteria}: {error_validacion}. Intentando scraping de respaldo...")
 
-            # PASO 4: validamos número, quinta y signo
-            resultado_validado, error_validacion = validar_coincidencias(
-                resultados_acumulados,
-                log
-            )
+                    respaldo = buscar_respaldo_secundario(nombre_loteria, log, urls_excluir=urls_ya_usadas_para_esta_loteria)
 
-            # Si no se alcanzaron las coincidencias mínimas pasamos a la siguiente lotería
+                    # El respaldo exige el mismo mínimo de fuentes que el principal
+                    if respaldo and respaldo["total_coincidencias"] >= MIN_FUENTES_COINCIDENTES:
+                        resultado_validado = {
+                            "numero"             : respaldo["numero"],
+                            "quinta"             : respaldo.get("quinta") or "",
+                            "signo"              : respaldo.get("signo") or "",
+                            "fuentes"            : respaldo["fuentes"],
+                            "total_coincidencias": respaldo["total_coincidencias"],
+                        }
+                        log.info(
+                            f"{nombre_loteria}: resultado obtenido por scraping de respaldo -> "
+                            f"numero={resultado_validado['numero']} "
+                            f"({resultado_validado['total_coincidencias']} fuente(s) secundaria(s))"
+                        )
+                    elif respaldo:
+                        log.info(
+                            f"{nombre_loteria}: el scraping de respaldo solo tuvo "
+                            f"{respaldo['total_coincidencias']} fuente(s) coincidente(s) "
+                            f"(mínimo {MIN_FUENTES_COINCIDENTES})"
+                        )
+                    else:
+                        log.info(f"{nombre_loteria}: tampoco se encontró en el scraping de respaldo")
+
+                # Ya hay resultado validado (principal o respaldo), no hace falta reintentar
+                if resultado_validado is not None:
+                    break
+
             if resultado_validado is None:
-                log.info(f"{nombre_loteria}: {error_validacion}")
+                log.info(
+                    f"{nombre_loteria}: se agotaron los {MAX_REINTENTOS_SIN_COINCIDENCIAS} reintentos "
+                    f"sin alcanzar {MIN_FUENTES_COINCIDENTES} fuentes coincidentes, se omite en este ciclo"
+                )
                 continue
 
-            # PASO 5: insertamos el resultado validado en la BD
+            # CASO 2: falta quinta Y signo -> completar con respaldo si coincide el número
+            # (escrutinio_html.py nunca separa "signo" de "quinta", por eso se exige que falten ambos)
+            if not resultado_validado.get("quinta") and not resultado_validado.get("signo"):
+                respaldo = buscar_respaldo_secundario(nombre_loteria, log, urls_excluir=urls_ya_usadas_para_esta_loteria)
+
+                if respaldo and respaldo.get("numero") == resultado_validado["numero"]:
+                    if not resultado_validado.get("quinta") and respaldo.get("quinta"):
+                        resultado_validado["quinta"] = respaldo["quinta"]
+                        log.info(f"{nombre_loteria}: quinta completada por scraping de respaldo ({respaldo['quinta']})")
+                    if not resultado_validado.get("signo") and respaldo.get("signo"):
+                        resultado_validado["signo"] = respaldo["signo"]
+                        log.info(f"{nombre_loteria}: signo completado por scraping de respaldo ({respaldo['signo']})")
+                elif respaldo:
+                    log.info(
+                        f"{nombre_loteria}: el scraping de respaldo trajo un número distinto "
+                        f"({respaldo.get('numero')} vs {resultado_validado['numero']}), se descarta su quinta/signo"
+                    )
+
+            # PASO 5: inserta el resultado final (con o sin parche de respaldo) en la BD
             insertado, error_insercion = insertar_resultado_scraping(
                 id_horario = id_horario,
                 numero     = resultado_validado["numero"],
@@ -334,7 +360,7 @@ def procesar_loterias(loterias: list, log: object):
             if insertado is None:
                 log.error(f"Error al insertar resultado de {nombre_loteria}: {error_insercion}")
 
-            # PASO 6: agregamos el resultado validado a la lista final
+            # PASO 6: agregamos el resultado a la lista final
             resultados_finales.append({
                 "id_horario"         : id_horario,
                 "nombre_loteria"     : nombre_loteria,
