@@ -2,12 +2,11 @@ import pytz
 import json
 import requests
 from datetime import datetime
-from src.services.db import ejecutar_query
+from src.services.db import ejecutar_query, ejecutar_transaccion
 from src.services.servicios_email import fecha_actual_colombia
 
 def buscar_loterias_hora_actual(log: object):
     try:
-        # obtenemos la hora actual
         log.info("obteniendo hora actual")
         zona_colombia = pytz.timezone("America/Bogota")
         hora_actual = datetime.now(zona_colombia).strftime("%H:%M")
@@ -16,7 +15,7 @@ def buscar_loterias_hora_actual(log: object):
         sql = """SELECT id_horario, nombre_loteria, hora_programada FROM es_config_horarios WHERE hora_programada <= %s AND estado = 0"""
 
         loterias = ejecutar_query(sql, (hora_actual,))
-        log.info(f"loterias encontradas: {loterias}")
+        # log.info(f"loterias encontradas: {loterias}")
         
         if not loterias:
             log.info("No hay loterías programadas para la hora actual")
@@ -48,16 +47,24 @@ def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,
             "serie": serie
         }, ensure_ascii=False)
 
-        # fecha actual en colombia
         fecha_hoy = fecha_actual_colombia()
 
-        # Insertamos el resultado en la tabla
-        sql = """
-            INSERT INTO es_resultados_loterias (id_horario, numero_ganador, fecha_sys)
-            VALUES (%s, %s, %s)
-        """
+        queries =[
+            (
+                """
+                INSERT INTO es_resultados_loterias (id_horario, numero_ganador, fecha_sys)
+                VALUES (%s, %s, %s)
+                """,
+                (id_horario, numero_ganador, fecha_hoy)
+            ),
+            (
+                "UPDATE es_config_horarios SET estado = 1 WHERE id_horario = %s",
+                (id_horario,)
 
-        ejecutar_query(sql, (id_horario, numero_ganador, fecha_hoy))
+            ),
+        ]
+
+        ejecutar_transaccion(queries)
 
         log.info(f"Resultado insertado correctamente | id_horario={id_horario} | numero_ganador={numero_ganador}")
         return True, None
