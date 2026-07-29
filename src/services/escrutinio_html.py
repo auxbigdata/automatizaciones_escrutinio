@@ -4,7 +4,7 @@ from datetime import datetime
 import pytz
 from bs4 import BeautifulSoup
 from src.services.servicios_email import fecha_actual_colombia
-from src.services.utils_scraping import MAPEO_GENERICO, normalizar_texto,SLUGS_GANAR_CHANCE,CODIGOS_LOTI
+from src.services.utils_scraping import MAPEO_GENERICO, normalizar_texto,SLUGS_GANAR_CHANCE,CODIGOS_LOTI, es_signo_zodiacal
 from src.services.playwright import abrir_navegador
 
 
@@ -425,8 +425,16 @@ def _extraer_signo_zodiacal_card(card, div_nombre, div_fecha):
             continue
         if elemento in (div_nombre, div_fecha):
             continue
+        # div_nombre puede envolver un <div> hijo con el mismo texto (ej. loteriasdecolombia);
+        # ese hijo no es == div_nombre, así que se descarta explícitamente por ubicación.
+        if div_nombre and elemento in div_nombre.find_all(['div', 'span']):
+            continue
+        if div_fecha and elemento in div_fecha.find_all(['div', 'span']):
+            continue
         texto = elemento.get_text().strip()
-        if texto and not texto.isdigit():
+        # Solo aceptamos el texto si es un signo zodiacal real (Astro Sol/Luna);
+        # cualquier otro texto suelto (ej. el nombre del sorteo repetido) se descarta.
+        if texto and es_signo_zodiacal(texto):
             return texto
     return ""
 

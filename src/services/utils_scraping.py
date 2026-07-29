@@ -316,8 +316,8 @@ CODIGOS_LOTI = {
 # Signos zodiacales válidos (para Astro Sol / Astro Luna)
 SIGNOS_ZODIACALES = {
     "aries", "tauro", "geminis", "géminis", "cancer", "cáncer", "leo",
-    "virgo", "libra", "escorpion", "escorpión", "sagitario", "capricornio",
-    "acuario", "piscis",
+    "virgo", "libra", "escorpio", "escorpion", "escorpión", "sagitario",
+    "capricornio", "acuario", "piscis",
 }
 
 MESES_ES = {
