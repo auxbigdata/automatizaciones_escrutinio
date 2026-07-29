@@ -30,89 +30,96 @@ def realizar_peticion(url: str, log: object):
         log.error(mensaje_error)
         return None, mensaje_error
 
-def scraping_acertemos(nombre_loteria: str, url: str, log: object):
+def scraping_supergiros(nombre_loteria: str, url: str, log: object):
     """
-    Extrae el resultado de una lotería desde Acertemos.
+    Extrae el resultado de una lotería desde SuperGiros Norte del Valle (resultados/).
 
-    Tabla HTML de 3 columnas: [0] Fecha dd/mm/yyyy | [1] Nombre | [2] Resultado
-    (número + quinta entre paréntesis). El meta description está desactualizado,
-    los datos reales están en las tablas.
+    Es un WordPress cuya tabla de resultados se llena en el navegador vía JS
+    (consume la misma API que "Gane Norte del Valle"), por eso necesita
+    Playwright (abrir_navegador) en vez de una petición simple. Cada resultado
+    es un '.newcard.result' con: nombre en 'h2.newcard__name', número + extra
+    juntos en 'span.newcard__number' (el extra viene en un '<i class="newcard__sign">'
+    interno, con formato "serie: 000" para chances o el nombre del signo para
+    astros) y fecha completa "YYYY-MM-DD HH:MM:SS" en 'span.newcard__date'.
 
     Retorna (dict, None) con numero/quinta si encontró, o (None, str) con el error.
     """
     try:
-        log.info(f"Consultando Acertemos para: {nombre_loteria}")
+        log.info(f"Consultando SuperGiros para: {nombre_loteria}")
 
-        response, error = realizar_peticion(url, log)
+        html, error = abrir_navegador(url, log)
         if error:
             return None, error
 
-        if response.status_code != 200:
-            mensaje_error = f"Acertemos respondió con status {response.status_code}"
-            log.error(mensaje_error)
-            return None, mensaje_error
-
-        soup = BeautifulSoup(response.text, 'html.parser')
+        soup = BeautifulSoup(html, 'html.parser')
 
         # Fecha de hoy para validar que el resultado sea actual
         fecha_hoy = fecha_actual_colombia()
 
-        # Los resultados están en tablas HTML, no en el meta description
-        tablas = soup.find_all('table')
+        cards = soup.select('#results .newcard.result')
 
-        if not tablas:
-            mensaje_error = "No se encontraron tablas de resultados en Acertemos"
+        if not cards:
+            mensaje_error = "No se encontraron cards de resultados en SuperGiros"
             log.error(mensaje_error)
             return None, mensaje_error
 
-        for tabla in tablas:
-            filas = tabla.find_all('tr')
+        for card in cards:
+            div_nombre = card.find('h2', class_='newcard__name')
+            if not div_nombre:
+                continue
 
-            for fila in filas:
-                celdas = fila.find_all('td')
+            nombre_en_pagina = ' '.join(div_nombre.get_text().split())
+            nombre_normalizado = normalizar_texto(nombre_en_pagina)
+            nombre_mapeado = MAPEO_GENERICO.get(nombre_normalizado)
 
-                # Fila válida: mínimo 3 columnas [Fecha|Nombre|Resultado]
-                if len(celdas) < 3:
-                    continue
+            if nombre_mapeado != nombre_loteria:
+                continue
 
-                # Fecha en la 1ra celda, formato dd/mm/yyyy
-                fecha_str = celdas[0].get_text().strip()
-                try:
-                    fecha_resultado = datetime.strptime(fecha_str, "%d/%m/%Y").strftime("%Y-%m-%d")
-                except ValueError:
-                    continue
+            # Fecha completa "2026-07-29 10:00:00": solo nos importa la parte de fecha
+            span_fecha = card.find('span', class_='newcard__date')
+            fecha_texto = span_fecha.get_text().strip() if span_fecha else ""
+            fecha_resultado = fecha_texto.split(" ")[0] if fecha_texto else ""
 
-                if fecha_resultado != fecha_hoy:
-                    continue
+            if fecha_resultado != fecha_hoy:
+                log.info(f"Resultado de {nombre_loteria} en SuperGiros es de {fecha_resultado}, no de hoy ({fecha_hoy})")
+                return None, f"Resultado de {nombre_loteria} en SuperGiros no es de la fecha actual"
 
-                nombre_en_pagina = ' '.join(celdas[1].get_text().split())
-                nombre_normalizado = normalizar_texto(nombre_en_pagina)
-                nombre_mapeado = MAPEO_GENERICO.get(nombre_normalizado)
+            span_numero = card.find('span', class_='newcard__number')
+            if not span_numero:
+                continue
 
-                if nombre_mapeado != nombre_loteria:
-                    continue
+            # El "extra" (quinta/signo) viene en un <i> dentro del mismo span,
+            # pegado al número: hay que separarlos antes de limpiar el número.
+            i_extra = span_numero.find('i', class_='newcard__sign')
+            extra_texto = i_extra.get_text().strip() if i_extra else ""
 
-                # Resultado en la 3ra celda: "1234" o "1234 (Géminis)"
-                resultado_crudo = celdas[2].get_text().strip()
-                partes = resultado_crudo.split('-')
+            numero = span_numero.get_text().strip()
+            if extra_texto and numero.endswith(extra_texto):
+                numero = numero[:-len(extra_texto)].strip()
 
-                # Buscamos el número de 4 dígitos
-                match_numero = re.search(r'\b\d{4}\b', partes[0])
-                if not match_numero:
-                    continue
+            if not numero:
+                continue
 
-                numero = match_numero.group()
-                quinta = partes[1].strip() if len(partes) > 1 else ""
+            # "serie: 000" -> quinta = "0" (quitamos ceros a la izquierda para que
+            # coincida con el formato de las demás fuentes); si no dice "serie:"
+            # es un signo zodiacal (Astros)
+            quinta = ""
+            if "serie:" in extra_texto.lower():
+                quinta = extra_texto.split(":", 1)[1].strip()
+                if quinta.isdigit():
+                    quinta = str(int(quinta))
+            elif extra_texto:
+                quinta = extra_texto.strip()
 
-                log.info(f"Resultado encontrado en Acertemos | {nombre_loteria}: número={numero} | quinta={quinta}")
-                return {"numero": numero, "quinta": quinta}, None
+            log.info(f"Resultado encontrado en SuperGiros | {nombre_loteria}: número={numero} | quinta={quinta}")
+            return {"numero": numero, "quinta": quinta}, None
 
-        mensaje_error = f"No se encontró '{nombre_loteria}' con fecha de hoy en Acertemos"
+        mensaje_error = f"No se encontró '{nombre_loteria}' con fecha de hoy en SuperGiros"
         log.info(mensaje_error)
         return None, mensaje_error
 
     except Exception as e:
-        mensaje_error = f"Error inesperado en Acertemos: {e}"
+        mensaje_error = f"Error inesperado en SuperGiros: {e}"
         log.error(mensaje_error)
         return None, mensaje_error
 

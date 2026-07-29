@@ -60,6 +60,23 @@ def recolectar_pool_secundario(log, urls_excluir: set = None) -> list[dict]:
     return pool
 
 
+def filtrar_pool_por_loteria(pool: list[dict], nombre_loteria: str) -> list[dict]:
+    """Filtra el pool crudo (sin consolidar) para una lotería puntual, en el mismo formato
+    que usa el orquestador para las fuentes del principal (numero/quinta/signo/fuente).
+    Se usa para SUMAR las fuentes del respaldo a las del principal antes de validar,
+    en vez de exigirle al respaldo alcanzar el mínimo de fuentes por su cuenta."""
+    return [
+        {
+            "numero": r["numero"],
+            "quinta": r.get("quinta") or "",
+            "signo" : r.get("signo") or "",
+            "fuente": r.get("fuente"),
+        }
+        for r in pool
+        if r.get("nombre_sorteo") == nombre_loteria and r.get("numero")
+    ]
+
+
 def consolidar_resultados_secundarios(pool: list[dict]) -> dict:
     """Agrupa el pool por lotería y saca el número mayoritario, junto con quinta/signo/serie mayoritarios entre las fuentes que reportaron ese número.
 

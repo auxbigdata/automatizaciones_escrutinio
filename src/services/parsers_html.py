@@ -600,7 +600,80 @@ def parsear_loti(soup: BeautifulSoup, url: str, log=None) -> list[dict]:
     return resultados
 
 
+def parsear_supergiros(soup: BeautifulSoup, url: str, log=None) -> list[dict]:
+    """
+    supergirosnortedelvalle.com/resultados/: la tabla se llena con JS (misma
+    API que "Gane Norte del Valle"), pero el motor de respaldo ya entrega el
+    HTML renderizado tras esperar networkidle. Cada resultado es un
+    '.newcard.result': nombre en 'h2.newcard__name', número + extra juntos en
+    'span.newcard__number' (el extra viene en un '<i class="newcard__sign">'
+    interno: "serie: 000" para chances -> quinta, o el nombre del signo para
+    astros) y fecha completa "YYYY-MM-DD HH:MM:SS" en 'span.newcard__date'.
+    """
+    resultados = []
+    hoy = fecha_hoy_iso()
+
+    cards = soup.select("#results .newcard.result")
+
+    for card in cards:
+        h2_nombre = card.find("h2", class_="newcard__name")
+        if not h2_nombre:
+            continue
+        nombre = homologar_nombre_sorteo(limpiar_texto(h2_nombre.get_text()))
+        if not nombre:
+            continue
+
+        span_fecha = card.find("span", class_="newcard__date")
+        fecha_texto = limpiar_texto(span_fecha.get_text()) if span_fecha else ""
+        fecha_iso = fecha_texto.split(" ")[0] if fecha_texto else None
+
+        # Validar fecha de hoy
+        if fecha_iso != hoy:
+            continue
+
+        span_numero = card.find("span", class_="newcard__number")
+        if not span_numero:
+            continue
+
+        # El extra (quinta/signo) viene en un <i> dentro del mismo span,
+        # pegado al número: hay que separarlos antes de limpiar el número.
+        i_extra = span_numero.find("i", class_="newcard__sign")
+        extra_texto = limpiar_texto(i_extra.get_text()) if i_extra else ""
+
+        numero = limpiar_texto(span_numero.get_text())
+        if extra_texto and numero.endswith(extra_texto):
+            numero = numero[: -len(extra_texto)].strip()
+
+        if not numero:
+            continue
+
+        # "serie: 000" -> quinta = "0" (sin ceros a la izquierda); si no dice
+        # "serie:" es un signo zodiacal (Astros)
+        quinta = None
+        signo = None
+        if "serie:" in extra_texto.lower():
+            valor = extra_texto.split(":", 1)[1].strip()
+            quinta = str(int(valor)) if valor.isdigit() else valor
+        elif extra_texto:
+            signo = extra_texto.title()
+
+        resultados.append(construir_resultado(
+            nombre_sorteo=nombre,
+            numero=numero,
+            fecha_iso=fecha_iso,
+            quinta=quinta,
+            signo=signo,
+            fuente=url,
+        ))
+
+    if log:
+        log.info(f"parsear_supergiros: se extrajeron {len(resultados)} resultados de {url}")
+
+    return resultados
+
+
 PARSERS_HTML_POR_DOMINIO = {
+    "supergirosnortedelvalle.com": parsear_supergiros,
     "acertemos.com": parsear_acertemos,
     "perlatodo.com": parsear_perlatodo,
     "jer.com.co": parsear_jer,

@@ -2,10 +2,14 @@ import time
 from src.services.db import ejecutar_query
 from src.services.escrutinio_consultas_bd import insertar_resultado_scraping
 from src.services.escrutinio_api import scraping_gane_norte_valle
-from src.services.escrutinio_respaldo_scraping import buscar_respaldo_secundario
+from src.services.escrutinio_respaldo_scraping import (
+    buscar_respaldo_secundario,
+    recolectar_pool_secundario,
+    filtrar_pool_por_loteria,
+)
 from src.services.utils_scraping import normalizar_texto, MAPEO_SIGNOS
 from src.services.escrutinio_html import (
-    scraping_acertemos,
+    scraping_supergiros,
     scraping_perla_todo,
     scraping_ganagana,
     scraping_jer,
@@ -62,8 +66,8 @@ def ejecutar_scraping_por_url(nombre_loteria: str, nombre_fuente: str, url: str,
             time.sleep(10)
             resultado, error = scraping_gane_norte_valle(nombre_loteria, url, log)
 
-        elif nombre_fuente == "Acertemos":
-            resultado, error = scraping_acertemos(nombre_loteria, url, log)
+        elif nombre_fuente == "supergiros":
+            resultado, error = scraping_supergiros(nombre_loteria, url, log)
 
         elif nombre_fuente == "Perla Todo":
             resultado, error = scraping_perla_todo(nombre_loteria, url, log)
@@ -288,32 +292,36 @@ def procesar_loterias(loterias: list, log: object):
                     log
                 )
 
-                # CASO 1: si el principal no validó ningún número, se dispara el scraping de respaldo para esta lotería
+                # CASO 1: si el principal no validó (número o quinta/signo sin llegar al mínimo),
+                # se dispara el scraping de respaldo para esta lotería y sus fuentes se SUMAN
+                # a las del principal -no se le exige al respaldo llegar solo al mínimo-, y se
+                # vuelve a validar el total combinado con la misma validar_coincidencias().
                 if resultado_validado is None:
                     log.info(f"{nombre_loteria}: {error_validacion}. Intentando scraping de respaldo...")
 
-                    respaldo = buscar_respaldo_secundario(nombre_loteria, log, urls_excluir=urls_ya_usadas_para_esta_loteria)
+                    pool_respaldo    = recolectar_pool_secundario(log, urls_excluir=urls_ya_usadas_para_esta_loteria)
+                    fuentes_respaldo = filtrar_pool_por_loteria(pool_respaldo, nombre_loteria)
 
-                    # El respaldo exige el mismo mínimo de fuentes que el principal
-                    if respaldo and respaldo["total_coincidencias"] >= MIN_FUENTES_COINCIDENTES:
-                        resultado_validado = {
-                            "numero"             : respaldo["numero"],
-                            "quinta"             : respaldo.get("quinta") or "",
-                            "signo"              : respaldo.get("signo") or "",
-                            "fuentes"            : respaldo["fuentes"],
-                            "total_coincidencias": respaldo["total_coincidencias"],
-                        }
+                    if fuentes_respaldo:
                         log.info(
-                            f"{nombre_loteria}: resultado obtenido por scraping de respaldo -> "
-                            f"numero={resultado_validado['numero']} "
-                            f"({resultado_validado['total_coincidencias']} fuente(s) secundaria(s))"
+                            f"{nombre_loteria}: el scraping de respaldo aportó {len(fuentes_respaldo)} "
+                            f"fuente(s) más, se suman a las {len(resultados_acumulados)} del principal"
                         )
-                    elif respaldo:
-                        log.info(
-                            f"{nombre_loteria}: el scraping de respaldo solo tuvo "
-                            f"{respaldo['total_coincidencias']} fuente(s) coincidente(s) "
-                            f"(mínimo {MIN_FUENTES_COINCIDENTES})"
+                        resultados_acumulados.extend(fuentes_respaldo)
+
+                        # Marcamos también esas URLs como usadas, por si el CASO 2 necesita respaldo de nuevo
+                        for r in fuentes_respaldo:
+                            if r.get("fuente"):
+                                urls_ya_usadas_para_esta_loteria.add(r["fuente"])
+
+                        # Revalidamos número/quinta/signo con el total combinado (principal + respaldo)
+                        resultado_validado, error_validacion = validar_coincidencias(
+                            resultados_acumulados,
+                            log
                         )
+
+                        if resultado_validado is None:
+                            log.info(f"{nombre_loteria}: {error_validacion} (ya sumando el respaldo)")
                     else:
                         log.info(f"{nombre_loteria}: tampoco se encontró en el scraping de respaldo")
 
