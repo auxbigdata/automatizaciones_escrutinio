@@ -21,6 +21,7 @@ MAPEO_GENERICO = {
     "ANTIOQUENITA 1":           "Antioqueñita Uno",
     "ANTIOQUENITA DIA":         "Antioqueñita Uno",
     "ANTIOQUEÑITA MAÑANA":      "Antioqueñita Uno",
+    "ANTIOQUENITA MANANA":      "Antioqueñita Uno",
     "ANTIOQUENITA":             "Antioqueñita Uno",
     "ANTIOQ1":                  "Antioqueñita Uno",
     "ANTIOQUEÑITA TARDE":       "Antioqueñita Dos",
@@ -28,6 +29,7 @@ MAPEO_GENERICO = {
     "ANTIOQUENITA 2":           "Antioqueñita Dos",
     "ANTIOQUENITA TARDE":       "Antioqueñita Dos",
     "ANTIOQUEÑITA NOCHE":       "Antioqueñita Dos",
+    "ANTIOQUENITA NOCHE":       "Antioqueñita Dos",
     "ANTIOQ2":                  "Antioqueñita Dos",
 
     # ----------DORADO
@@ -67,13 +69,13 @@ MAPEO_GENERICO = {
     "PAISITA 3 SABADO":         "Paisita Tres",
     "PAISITA TRES":             "Paisita Tres",
     "PAISSAB":                  "Paisita Tres",
-    "PAISITA 3":                "Paisita Tres",        # GanaGana
+    "PAISITA 3":                "Paisita Tres",       
 
     # ----------CAFETERITO
     "CAFETERITO DIA":           "Cafeterito Día",
     "CAFETERITO TARDE":         "Cafeterito Día",
     "CAFETARDE":                "Cafeterito Día",
-    "CAFETERITO":               "Cafeterito Día",      # Perla Todo
+    "CAFETERITO":               "Cafeterito Día",     
     "CAFETERITO NOCHE":         "Cafeterito Noche",
     "CAFENOCHE":                "Cafeterito Noche",
 
@@ -81,7 +83,7 @@ MAPEO_GENERICO = {
     "CARIBEÑA DIA":             "Caribeña Día",
     "CARIBENA DIA":             "Caribeña Día",
     "CARIBDIA":                 "Caribeña Día",
-    "CARIBENA":                 "Caribeña Día",        # Perla Todo
+    "CARIBENA":                 "Caribeña Día",        
     "CARIBEÑA NOCHE":           "Caribeña Noche",
     "CARIBENA NOCHE":           "Caribeña Noche",
     "CARIBNOCHE":               "Caribeña Noche",
@@ -90,7 +92,7 @@ MAPEO_GENERICO = {
     "CULONA DIA":               "Culona Día",
     "LA CULONA DIA":            "Culona Día",
     "CULODIA":                  "Culona Día",
-    "CULONA":                   "Culona Día",          # Perla Todo / GANAR CHANCE
+    "CULONA":                   "Culona Día",         
     "CULONA NOCHE":             "Culona Noche",
     "CULONOCHE":                "Culona Noche",
 
@@ -98,19 +100,19 @@ MAPEO_GENERICO = {
     "FANTASTICA DIA":           "Fantástica Día",
     "LA FANTASTICA DIA":        "Fantástica Día",
     "FANTADIA":                 "Fantástica Día",
-    "FANTASTICA":               "Fantástica Día",      # Perla Todo
-    "LA FANTASTICA 1":          "Fantástica Día",      # GanaGana
+    "FANTASTICA":               "Fantástica Día",      
+    "LA FANTASTICA 1":          "Fantástica Día",      
     "FANTASTICA NOCHE":         "Fantástica Noche",
     "LA FANTASTICA NOCHE":      "Fantástica Noche",
     "FANTANOCHE":               "Fantástica Noche",
-    "LA FANTASTICA 2":          "Fantástica Noche",    # GanaGana
+    "LA FANTASTICA 2":          "Fantástica Noche",   
 
     # ----------MOTILÓN
     "MOTILON DIA":              "Motilón Tarde",
     "MOTILO DIA":               "Motilón Tarde",
     "MOTILON TARDE":            "Motilón Tarde",
     "MOTIDIA":                  "Motilón Tarde",
-    "MOTILON":                  "Motilón Tarde",       # Perla Todo
+    "MOTILON":                  "Motilón Tarde",     
     "MOTILON NOCHE":            "Motilón Noche",
     "EL MOTILON":               "Motilón Noche",
     "MOTINOCHE":                "Motilón Noche",
@@ -118,7 +120,7 @@ MAPEO_GENERICO = {
     # ----------SINUANO
     "SINUANO DIA":              "Sinuano Día",
     "SINUDIA":                  "Sinuano Día",
-    "SINUANO":                  "Sinuano Día",         # Perla Todo
+    "SINUANO":                  "Sinuano Día",         
     "SINUANO NOCHE":            "Sinuano Noche",
     "SINUNOCHE":                "Sinuano Noche",
 
@@ -126,59 +128,59 @@ MAPEO_GENERICO = {
     "PIJAO":                    "El Pijao de Oro",
     "PIJAO NOCHE":              "El Pijao de Oro",
     "EL PIJAO DE ORO":          "El Pijao de Oro",
-    "PIJAO DE ORO":             "El Pijao de Oro",    # JER
-    "PIJAO ORO":                "El Pijao de Oro",    # GANAR CHANCE
+    "PIJAO DE ORO":             "El Pijao de Oro",    
+    "PIJAO ORO":                "El Pijao de Oro",   
 
     # ----------SAMÁN
     "SAMAN":                    "El Samán de la Suerte",
     "SAMAN DE LA SUERTE":       "El Samán de la Suerte",
     "EL SAMAN DE LA SUERTE":    "El Samán de la Suerte",
     "SAMANDIA":                 "El Samán de la Suerte",
-    "SAMAN DIA":                "El Samán de la Suerte",  # GANAR CHANCE
+    "SAMAN DIA":                "El Samán de la Suerte",  
 
     # ----------LOTERÍAS TRADICIONALES
     "CUNDINAMARCA":             "Lotería Cundinamarca",
     "LOTERIA DE CUNDINAMARCA":  "Lotería Cundinamarca",
-    "LOTERIA CUNDINAMARCA":     "Lotería Cundinamarca",   # GANAR CHANCE
+    "LOTERIA CUNDINAMARCA":     "Lotería Cundinamarca",   
     "TOLIMA":                   "Lotería Tolima",
     "LOTERIA DEL TOLIMA":       "Lotería Tolima",
-    "LOTERIA TOLIMA":           "Lotería Tolima",         # GANAR CHANCE
+    "LOTERIA TOLIMA":           "Lotería Tolima",        
     "CRUZROJA":                 "Lotería Cruz Roja",
     "CRUZ ROJA":                "Lotería Cruz Roja",
     "LOTERIA CRUZ ROJA":        "Lotería Cruz Roja",
     "HUILA":                    "Lotería Huila",
     "LOTERIA DEL HUILA":        "Lotería Huila",
-    "LOTERIA HUILA":            "Lotería Huila",          # GANAR CHANCE
+    "LOTERIA HUILA":            "Lotería Huila",        
     "META":                     "Lotería Meta",
     "LOTERIA DEL META":         "Lotería Meta",
-    "LOTERIA META":             "Lotería Meta",           # GANAR CHANCE
+    "LOTERIA META":             "Lotería Meta",         
     "BOGOTA":                   "Lotería Bogotá",
     "LOTERIA DE BOGOTA":        "Lotería Bogotá",
-    "LOTERIA BOGOTA":           "Lotería Bogotá",         # GANAR CHANCE
+    "LOTERIA BOGOTA":           "Lotería Bogotá",       
     "MEDELLIN":                 "Lotería Medellín",
     "LOTERIA DE MEDELLIN":      "Lotería Medellín",
-    "LOTERIA MEDELLIN":         "Lotería Medellín",       # GANAR CHANCE
+    "LOTERIA MEDELLIN":         "Lotería Medellín",     
     "SANTANDER":                "Lotería Santander",
     "LOTERIA DE SANTANDER":     "Lotería Santander",
-    "LOTERIA SANTANDER":        "Lotería Santander",      # GANAR CHANCE
+    "LOTERIA SANTANDER":        "Lotería Santander",    
     "RISARALDA":                "Lotería Risaralda",
     "LOTERIA DE RISARALDA":     "Lotería Risaralda",
-    "LOTERIA RISARALDA":        "Lotería Risaralda",      # GANAR CHANCE
+    "LOTERIA RISARALDA":        "Lotería Risaralda",    
     "BOYACA":                   "Lotería Boyacá",
     "LOTERIA DE BOYACA":        "Lotería Boyacá",
-    "LOTERIA BOYACA":           "Lotería Boyacá",         # GANAR CHANCE
+    "LOTERIA BOYACA":           "Lotería Boyacá",       
     "MANIZALES":                "Lotería Manizales",
     "LOTERIA DE MANIZALES":     "Lotería Manizales",
-    "LOTERIA MANIZALES":        "Lotería Manizales",      # GANAR CHANCE
+    "LOTERIA MANIZALES":        "Lotería Manizales",    
     "QUINDIO":                  "Lotería Quindío",
     "LOTERIA DEL QUINDIO":      "Lotería Quindío",
-    "LOTERIA QUINDIO":          "Lotería Quindío",        # GANAR CHANCE
+    "LOTERIA QUINDIO":          "Lotería Quindío",      
     "VALLE":                    "Lotería Valle",
     "LOTERIA DEL VALLE":        "Lotería Valle",
-    "LOTERIA VALLE":            "Lotería Valle",          # GANAR CHANCE
+    "LOTERIA VALLE":            "Lotería Valle",        
     "CAUCA":                    "Lotería Cauca",
     "LOTERIA DEL CAUCA":        "Lotería Cauca",
-    "LOTERIA CAUCA":            "Lotería Cauca",          # GANAR CHANCE
+    "LOTERIA CAUCA":            "Lotería Cauca",        
     "EXTRA":                    "Extra de Colombia",
     "EXTRA DE COLOMBIA":        "Extra de Colombia",
 }

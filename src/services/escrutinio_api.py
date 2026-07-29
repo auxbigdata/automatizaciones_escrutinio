@@ -39,9 +39,10 @@ def scraping_gane_norte_valle(nombre_loteria:str, url:str, log:object):
         # Recorremos cada resultado que devolvió la API
         for item in resultados:
 
-            # display_name es el nombre que usa esta fuente para la lotería
+            # display_name es el nombre que usa esta fuente para la lotería.
+            # Viene anidado dentro de "lottery", no en el nivel raíz del item.
             # Lo normalizamos para compararlo con el mapeo genérico
-            display_name = normalizar_texto(item.get("display_name", ""))
+            display_name = normalizar_texto(item.get("lottery", {}).get("display_name", ""))
 
             # Buscamos en el mapeo genérico si ese display_name
             # corresponde a la lotería que estamos buscando
@@ -63,11 +64,15 @@ def scraping_gane_norte_valle(nombre_loteria:str, url:str, log:object):
             numero = item.get("number", "")
 
             # La quinta/serie viene en zodiac_sign con formato "serie: 009"
-            # Si dice "serie:" extraemos el número, si no (ej: "tauro") lo dejamos tal cual
+            # Si dice "serie:" extraemos el número (sin ceros a la izquierda, para
+            # que coincida con el formato de las demás fuentes), si no (ej: "tauro")
+            # lo dejamos tal cual
             zodiac_sign = item.get("zodiac_sign", "") or ""
             quinta = ""
             if "serie:" in zodiac_sign.lower():
                 quinta = zodiac_sign.split(":")[1].strip()
+                if quinta.isdigit():
+                    quinta = str(int(quinta))
             elif zodiac_sign:
                 # Para el Astro guardamos el signo zodiacal
                 quinta = zodiac_sign.strip()

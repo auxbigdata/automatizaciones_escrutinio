@@ -21,7 +21,11 @@ def parsear_chancescolombia(page: Page, url: str, log=None) -> list[dict]:
 
     try:
         # 1. Asegurar la carga e hidratación del SPA de Nuxt
-        page.wait_for_load_state("networkidle", timeout=30000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=30000)
+        except Exception:
+            if log:
+                log.warning(f"Timeout esperando networkidle en {url} (puede que la red no haya quedado inactiva por anuncios/analytics). Continuando...")
         page.wait_for_timeout(4000)
 
         # 2. Localizar las cabeceras de texto de las fechas
@@ -135,7 +139,11 @@ def parsear_loteriasdecolombia(page: Page, url: str, log=None) -> list[dict]:
 
     try:
         # 1. Esperar hidratación completa del SPA
-        page.wait_for_load_state("networkidle", timeout=20000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=20000)
+        except Exception:
+            if log:
+                log.warning(f"Timeout esperando networkidle en {url} (puede que la red no haya quedado inactiva por anuncios/analytics). Continuando...")
         page.wait_for_timeout(4000)
 
         # 2. Localizar las tarjetas p-card
@@ -248,7 +256,11 @@ def parsear_boletin_gana(page: Page, url: str, log=None) -> list[dict]:
 
     try:
         # 1. Esperar hidratación completa del SPA de Gana
-        page.wait_for_load_state("networkidle", timeout=45000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=45000)
+        except Exception:
+            if log:
+                log.warning(f"Timeout esperando networkidle en {url} (puede que la red no haya quedado inactiva por anuncios/analytics). Continuando...")
         page.wait_for_timeout(4000)
 
         # =========================================================================
