@@ -208,6 +208,142 @@ MAPEO_SIGNOS = {
 
 
 # ==========================================================
+# VALIDACIÓN POR CONSENSO ENTRE FUENTES
+# Compartida por el orquestador principal y por el scraping de respaldo,
+# para que ambos exijan siempre el mismo mínimo de fuentes coincidentes.
+# ==========================================================
+
+# Mínimo de fuentes que deben coincidir para validar el número (Caso 1, obligatorio)
+MIN_FUENTES_COINCIDENTES = 3
+
+# Mínimo de fuentes coincidentes para aceptar quinta/signo cuando no se logran las
+# MIN_FUENTES_COINCIDENTES habituales (Caso 2: se acepta con 2 fuentes de acuerdo)
+MIN_FUENTES_QUINTA_SIGNO = 2
+
+
+def _mejor_candidato(valores: list):
+    """Retorna (valor_mas_frecuente, cantidad) a partir de una lista de valores, o ("", 0) si está vacía."""
+    if not valores:
+        return "", 0
+    conteo = {}
+    for v in valores:
+        conteo[v] = conteo.get(v, 0) + 1
+    return max(conteo.items(), key=lambda item: item[1])
+
+
+def validar_coincidencias(resultados: list, log: object):
+    """Valida el número exigiendo MIN_FUENTES_COINCIDENTES (si no se alcanza, retorna (None, mensaje): Caso 1).
+
+    Con el número ya validado, quinta y signo (solo entre las fuentes que los trajeron) se
+    aceptan con MIN_FUENTES_COINCIDENTES fuentes de acuerdo, o con MIN_FUENTES_QUINTA_SIGNO como
+    mínimo aceptable si no se logran las MIN_FUENTES_COINCIDENTES. El dict retornado incluye
+    "quinta_pendiente"/"signo_pendiente" para que el caller (Caso 2) sepa si vale la pena buscar
+    más fuentes de respaldo antes de conformarse con ese mínimo aceptable.
+
+    Retorna (dict, None) o (None, mensaje).
+    """
+    try:
+        if not resultados:
+            return None, "No hay resultados para comparar"
+
+        # NIVEL 1: Validar el número
+        conteo_numero = {}
+        for r in resultados:
+            num = r['numero']
+            if num not in conteo_numero:
+                conteo_numero[num] = {
+                    "cantidad" : 0,
+                    "fuentes"  : [],
+                    "quintas"  : [],
+                    "signos"   : []
+                }
+            conteo_numero[num]["cantidad"] += 1
+            conteo_numero[num]["fuentes"].append(r["fuente"])
+
+            # Solo si la fuente trajo quinta: normalizamos y resolvemos sinónimos (ej. Escorpión=Escorpio)
+            if r.get('quinta'):
+                quinta_normalizada = normalizar_texto(r['quinta'])
+                quinta_final = MAPEO_SIGNOS.get(quinta_normalizada, quinta_normalizada)
+                conteo_numero[num]["quintas"].append(quinta_final)
+
+            # Solo acumulamos signo si la fuente lo trajo
+            if r.get('signo'):
+                signo_normalizado = normalizar_texto(r['signo'])
+                signo_final = MAPEO_SIGNOS.get(signo_normalizado, signo_normalizado)
+                conteo_numero[num]["signos"].append(signo_final)
+
+        # Buscamos el número con suficientes coincidencias
+        numero_validado = None
+        datos_numero    = None
+        for num, datos in conteo_numero.items():
+            if datos["cantidad"] >= MIN_FUENTES_COINCIDENTES:
+                numero_validado = num
+                datos_numero    = datos
+                log.info(f"Número validado: {num} con {datos['cantidad']} fuentes")
+                break
+
+        if numero_validado is None:
+            mensaje_error = f"No se alcanzaron {MIN_FUENTES_COINCIDENTES} fuentes coincidentes para el número"
+            log.info(mensaje_error)
+            log.info(f"Resultados obtenidos: {resultados}")
+            return None, mensaje_error
+
+        # NIVEL 2: Quinta (solo si alguna fuente la trajo). No invalida el número: si no
+        # alcanza ni el mínimo aceptable de 2, simplemente queda vacía.
+        quinta_final     = ""
+        quinta_pendiente = False
+        if datos_numero["quintas"]:
+            valor, cantidad = _mejor_candidato(datos_numero["quintas"])
+            if cantidad >= MIN_FUENTES_COINCIDENTES:
+                quinta_final = valor
+                log.info(f"Quinta validada: {valor} con {cantidad} fuentes")
+            elif cantidad >= MIN_FUENTES_QUINTA_SIGNO:
+                quinta_final     = valor
+                quinta_pendiente = True
+                log.info(f"Quinta aceptada con {cantidad} fuentes (no se alcanzaron {MIN_FUENTES_COINCIDENTES}): {valor}")
+            else:
+                quinta_pendiente = True
+                log.info(f"Quinta sin consenso suficiente ({cantidad} fuente(s)), queda pendiente de respaldo")
+
+        # NIVEL 3: Signo (solo si alguna fuente lo trajo). Misma lógica que la quinta.
+        signo_final     = ""
+        signo_pendiente = False
+        if datos_numero["signos"]:
+            valor, cantidad = _mejor_candidato(datos_numero["signos"])
+            if cantidad >= MIN_FUENTES_COINCIDENTES:
+                signo_final = valor
+                log.info(f"Signo validado: {valor} con {cantidad} fuentes")
+            elif cantidad >= MIN_FUENTES_QUINTA_SIGNO:
+                signo_final     = valor
+                signo_pendiente = True
+                log.info(f"Signo aceptado con {cantidad} fuentes (no se alcanzaron {MIN_FUENTES_COINCIDENTES}): {valor}")
+            else:
+                signo_pendiente = True
+                log.info(f"Signo sin consenso suficiente ({cantidad} fuente(s)), queda pendiente de respaldo")
+
+        log.info(f"Resultado validado (número obligatorio; quinta/signo con su mejor consenso disponible)")
+        log.info(f"   Número : {numero_validado}")
+        log.info(f"   Quinta : {quinta_final}{' (pendiente)' if quinta_pendiente else ''}")
+        log.info(f"   Signo  : {signo_final}{' (pendiente)' if signo_pendiente else ''}")
+        log.info(f"   Fuentes: {', '.join(datos_numero['fuentes'])}")
+
+        return {
+            "numero"             : numero_validado,
+            "quinta"             : quinta_final,
+            "signo"              : signo_final,
+            "quinta_pendiente"   : quinta_pendiente,
+            "signo_pendiente"    : signo_pendiente,
+            "fuentes"            : datos_numero["fuentes"],
+            "total_coincidencias": datos_numero["cantidad"]
+        }, None
+
+    except Exception as e:
+        mensaje_error = f"Error al validar coincidencias: {e}"
+        log.error(mensaje_error)
+        return None, mensaje_error
+
+
+# ==========================================================
 # SLUGS DE GANAR CHANCE: para construir https://www.ganarchance.com/resultado/{slug}
 # ==========================================================
 SLUGS_GANAR_CHANCE = {
