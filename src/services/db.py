@@ -1,4 +1,4 @@
-import psycopg2  # Librería para conectarse a bases de datos PostgreSQL
+import psycopg2  
 from src.settings.entorno import env 
 
 def get_connection():
