@@ -9,9 +9,9 @@ A diferencia del principal (busca UNA lotería por fuente), este motor
 lee cada página completa y devuelve TODOS los sorteos del día, por eso
 se consolida por nombre de lotería.
 """
-from collections import Counter
 from playwright.sync_api import sync_playwright
 from src.services.escru_scraping import scraping_generico, obtener_paginas_db
+from src.services.utils_scraping import validar_coincidencias
 
 
 def recolectar_pool_secundario(log, urls_excluir: set = None) -> list[dict]:
@@ -77,10 +77,12 @@ def filtrar_pool_por_loteria(pool: list[dict], nombre_loteria: str) -> list[dict
     ]
 
 
-def consolidar_resultados_secundarios(pool: list[dict]) -> dict:
-    """Agrupa el pool por lotería y saca el número mayoritario, junto con quinta/signo/serie mayoritarios entre las fuentes que reportaron ese número.
+def consolidar_resultados_secundarios(pool: list[dict], log) -> dict:
+    """Agrupa el pool por lotería y valida cada una con validar_coincidencias(), el mismo
+    criterio (mínimo MIN_FUENTES_COINCIDENTES fuentes) que usa el scraping principal.
+    Las loterías que no alcancen el mínimo quedan fuera del resultado.
 
-    Retorna {nombre_loteria: {"numero", "quinta", "signo", "serie", "fuentes", "total_coincidencias"}}.
+    Retorna {nombre_loteria: {"numero", "quinta", "signo", "fuentes", "total_coincidencias"}}.
     """
     por_loteria: dict[str, list[dict]] = {}
     for r in pool:
@@ -91,73 +93,22 @@ def consolidar_resultados_secundarios(pool: list[dict]) -> dict:
 
     consolidado = {}
     for nombre, candidatos in por_loteria.items():
-        conteo_numero = Counter(c["numero"] for c in candidatos if c.get("numero"))
-        if not conteo_numero:
+        resultado_validado, error = validar_coincidencias(candidatos, log)
+        if resultado_validado is None:
+            log.info(f"Scraping de respaldo: '{nombre}' descartado ({error})")
             continue
-        numero_mayoritario, total_coincidencias = conteo_numero.most_common(1)[0]
-
-        candidatos_del_numero = [c for c in candidatos if c.get("numero") == numero_mayoritario]
-
-        quinta = None
-        conteo_quinta = Counter(c["quinta"] for c in candidatos_del_numero if c.get("quinta"))
-        if conteo_quinta:
-            quinta = conteo_quinta.most_common(1)[0][0]
-
-        signo = None
-        conteo_signo = Counter(c["signo"] for c in candidatos_del_numero if c.get("signo"))
-        if conteo_signo:
-            signo = conteo_signo.most_common(1)[0][0]
-
-        serie = None
-        conteo_serie = Counter(c["serie"] for c in candidatos_del_numero if c.get("serie"))
-        if conteo_serie:
-            serie = conteo_serie.most_common(1)[0][0]
-
-        fuentes = [c.get("fuente") for c in candidatos_del_numero if c.get("fuente")]
-
-        consolidado[nombre] = {
-            "numero": numero_mayoritario,
-            "quinta": quinta,
-            "signo": signo,
-            "serie": serie,
-            "fuentes": fuentes,
-            "total_coincidencias": total_coincidencias,
-        }
+        consolidado[nombre] = resultado_validado
 
     return consolidado
 
 
-def buscar_respaldo_secundario(nombre_loteria: str, log, urls_excluir: set = None):
-    """Casos 1 y 2: dispara el scraping de respaldo completo y devuelve lo encontrado para `nombre_loteria`, o None."""
-    log.info(f"Scraping de respaldo: buscando '{nombre_loteria}' en todas las fuentes secundarias")
-
-    # Le pasamos las URLS que ya aportaron resultado en el scraping principal, para que no las vuelva a consultar
-    pool = recolectar_pool_secundario(log, urls_excluir=urls_excluir)
-    if not pool:
-        return None
-
-    consolidado = consolidar_resultados_secundarios(pool)
-    resultado = consolidado.get(nombre_loteria)
-
-    if resultado:
-        log.info(
-            f"Scraping de respaldo: '{nombre_loteria}' -> numero={resultado['numero']} "
-            f"| quinta={resultado['quinta']} | signo={resultado['signo']} "
-            f"| coincidencias={resultado['total_coincidencias']}"
-        )
-    else:
-        log.info(f"Scraping de respaldo: no se encontró '{nombre_loteria}' en ninguna fuente secundaria")
-
-    return resultado
-
-
 def respaldo_total_scraping(log) -> list[dict]:
-    """Caso 3: el scraping principal falló por completo. Corre el respaldo sobre TODAS las páginas y devuelve el mejor resultado por lotería, en el formato que espera el correo de src/robots/scraping.py."""
+    """Caso 3: el scraping principal falló por completo. Corre el respaldo sobre TODAS las páginas y devuelve, por lotería, solo los resultados que alcanzaron el mínimo de fuentes coincidentes (mismo criterio que el scraping principal), en el formato que espera el correo de src/robots/scraping.py."""
     pool = recolectar_pool_secundario(log)
     if not pool:
         return []
 
-    consolidado = consolidar_resultados_secundarios(pool)
+    consolidado = consolidar_resultados_secundarios(pool, log)
 
     resultados = []
     for nombre_loteria, datos in consolidado.items():

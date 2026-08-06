@@ -45,9 +45,13 @@ def main():
 
     resultados, error_scraping = procesar_loterias(loterias, log)
 
-    # CASO 3: falló el scraping principal -> se corre el de respaldo
+    # CASO 3: el scraping principal falló por completo (falla técnica real: sin URLs activas,
+    # excepción no controlada, etc.) -> se corre el de respaldo como último recurso.
+    # Si procesar_loterias corrió bien pero ninguna lotería alcanzó el mínimo de fuentes,
+    # retorna [] (no None) y eso NO dispara el Caso 3: se omite este ciclo y se reintenta
+    # en el próximo cron.
     if resultados is None:
-        log.warning(f"procesar_loterias no retornó resultados: {error_scraping}. Ejecutando scraping de respaldo...")
+        log.warning(f"procesar_loterias falló técnicamente: {error_scraping}. Ejecutando scraping de respaldo...")
 
         resultados = respaldo_total_scraping(log)
 
@@ -63,6 +67,16 @@ def main():
             return
 
         log.info(f"Scraping de respaldo: {len(resultados)} resultado(s) obtenido(s)")
+
+    elif not resultados:
+        log.info("Ninguna lotería alcanzó el mínimo de fuentes coincidentes en este ciclo. Se omite, sin Caso 3, y se reintenta en el próximo cron.")
+        enviar_discord(
+            mensaje="No se alcanzaron fuentes coincidentes para las loterías pendientes de este ciclo.",
+            titulo=f"{prefijo} SIN COINCIDENCIAS",
+            log=log,
+            color=15105570  # naranja: aviso, no es un error crítico del robot
+        )
+        return
 
     cuerpo_resultados =""
     cuerpo_resultados_discord =""
