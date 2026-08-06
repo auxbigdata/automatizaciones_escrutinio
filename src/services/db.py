@@ -29,6 +29,8 @@ def ejecutar_query(sql, params=None):
 
 # Ejecuta varias queries (sql, params) en UNA sola conexión/transacción. Si alguna falla, se hace rollback de todas.
 def ejecutar_transaccion(queries:list[tuple]):
+    conn = None  # si get_connection() falla, conn queda en None y evitamos "local variable 'conn'
+                 # referenced before assignment" en el except/finally, que tapaba el error real de conexión
     try:
         conn=get_connection()
         with conn.cursor() as cur:
@@ -36,7 +38,9 @@ def ejecutar_transaccion(queries:list[tuple]):
                 cur. execute(sql, params or ())
         conn.commit()
     except Exception as e:
-        conn.rollback()
+        if conn is not None:
+            conn.rollback()
         raise e
     finally:
-        conn.close()
+        if conn is not None:
+            conn.close()
