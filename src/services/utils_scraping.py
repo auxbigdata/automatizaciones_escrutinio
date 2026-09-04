@@ -24,6 +24,7 @@ MAPEO_GENERICO = {
     "ANTIOQUENITA MANANA":      "Antioqueñita Uno",
     "ANTIOQUENITA":             "Antioqueñita Uno",
     "ANTIOQ1":                  "Antioqueñita Uno",
+    "ANTIOQUENITA1":            "Antioqueñita Uno",
     "ANTIOQUEÑITA TARDE":       "Antioqueñita Dos",
     "ANTIOQUEÑITA 2":           "Antioqueñita Dos",
     "ANTIOQUENITA 2":           "Antioqueñita Dos",
@@ -31,6 +32,7 @@ MAPEO_GENERICO = {
     "ANTIOQUEÑITA NOCHE":       "Antioqueñita Dos",
     "ANTIOQUENITA NOCHE":       "Antioqueñita Dos",
     "ANTIOQ2":                  "Antioqueñita Dos",
+    "ANTIOQUENITA2":            "Antioqueñita Dos",
 
     # ----------DORADO
     "DORADO DIA":               "Dorado Mañana",
@@ -46,9 +48,11 @@ MAPEO_GENERICO = {
     "ASTRO SOL":                "Astro Sol",
     "SUPER ASTRO SOL":          "Astro Sol",
     "ASTROSOL":                 "Astro Sol",
+    "ASTROSOL 2Y30 PM":         "Astro Sol",
     "ASTRO LUNA":               "Astro Luna",
     "SUPER ASTRO LUNA":         "Astro Luna",
     "ASTROLUNA":                "Astro Luna",
+    "ASTROLUNA 10Y45 PM":       "Astro Luna",
 
     # ----------CHONTICO
     "CHONTICO DIA":             "Chontico Millonario",
@@ -62,9 +66,11 @@ MAPEO_GENERICO = {
     # ----------PAISITA
     "PAISITA DIA":              "Paisita Uno",
     "PAISITA 1":                "Paisita Uno",
+    "PAISITA1":                 "Paisita Uno",
     "PAISDIA":                  "Paisita Uno",
     "PAISITA NOCHE":            "Paisita Dos",
     "PAISITA 2":                "Paisita Dos",
+    "PAISITA2":                 "Paisita Dos",
     "PAISNOCHE":                "Paisita Dos",
     "PAISITA 3 SABADO":         "Paisita Tres",
     "PAISITA TRES":             "Paisita Tres",
@@ -92,8 +98,9 @@ MAPEO_GENERICO = {
     "CULONA DIA":               "Culona Día",
     "LA CULONA DIA":            "Culona Día",
     "CULODIA":                  "Culona Día",
-    "CULONA":                   "Culona Día",         
+    "CULONA":                   "Culona Día",
     "CULONA NOCHE":             "Culona Noche",
+    "LA CULONA NOCHE":          "Culona Noche",
     "CULONOCHE":                "Culona Noche",
 
     # ----------FANTÁSTICA

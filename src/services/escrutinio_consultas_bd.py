@@ -29,8 +29,8 @@ def buscar_loterias_hora_actual(log: object):
             FROM es_config_horarios
             WHERE hora_programada <= %s
               AND (
-                    estado = %s
-                 OR (estado = %s
+                    estado_scraping = %s
+                 OR (estado_scraping = %s
                      AND fecha_actualizacion < now() - interval %s)
               )
         """
@@ -52,10 +52,10 @@ def buscar_loterias_hora_actual(log: object):
         # -ni la que ya está corriendo ni las que todavía están en cola dentro de este mismo ciclo.
         ids_horario = [loteria[0] for loteria in loterias]
         ejecutar_query(
-            "UPDATE es_config_horarios SET estado = %s WHERE id_horario = ANY(%s)",
+            "UPDATE es_config_horarios SET estado_scraping = %s WHERE id_horario = ANY(%s)",
             (ESTADO_CORRIENDO_SCRAPING, ids_horario)
         )
-        log.info(f"Loterías marcadas como Corriendo Scraping (estado={ESTADO_CORRIENDO_SCRAPING}): {ids_horario}")
+        log.info(f"Loterías marcadas como Corriendo Scraping (estado_scraping={ESTADO_CORRIENDO_SCRAPING}): {ids_horario}")
 
         return loterias, None
 
@@ -66,17 +66,16 @@ def buscar_loterias_hora_actual(log: object):
 
 
 def actualizar_estado_horario(id_horario: int, estado: int, log: object):
-    """Actualiza es_config_horarios.estado para una lotería puntual (usado por el lock de
-    concurrencia y por el manejo de errores del orquestador). Retorna (True, None) o (None, mensaje)."""
+    """Actualiza es_config_horarios.estado_scraping para una lotería puntual. Retorna (True, None) o (None, mensaje)."""
     try:
         ejecutar_query(
-            "UPDATE es_config_horarios SET estado = %s WHERE id_horario = %s",
+            "UPDATE es_config_horarios SET estado_scraping = %s WHERE id_horario = %s",
             (estado, id_horario)
         )
-        log.info(f"id_horario={id_horario} actualizado a estado={estado}")
+        log.info(f"id_horario={id_horario} actualizado a estado_scraping={estado}")
         return True, None
     except Exception as e:
-        mensaje_error = f"Error al actualizar estado de id_horario={id_horario} a estado={estado}: {e}"
+        mensaje_error = f"Error al actualizar estado_scraping de id_horario={id_horario} a estado={estado}: {e}"
         log.error(mensaje_error)
         return None, mensaje_error
     
@@ -107,7 +106,7 @@ def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,
                 (id_horario, numero_ganador, fecha_hoy)
             ),
             (
-                f"UPDATE es_config_horarios SET estado = {ESTADO_SCRAPING_EJECUTADO} WHERE id_horario = %s",
+                f"UPDATE es_config_horarios SET estado_scraping = {ESTADO_SCRAPING_EJECUTADO} WHERE id_horario = %s",
                 (id_horario,)
 
             ),
