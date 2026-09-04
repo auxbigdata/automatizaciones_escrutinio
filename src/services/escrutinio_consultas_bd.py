@@ -22,12 +22,14 @@ def buscar_loterias_hora_actual(log: object):
         log.info("obteniendo hora actual")
         zona_colombia = pytz.timezone("America/Bogota")
         hora_actual = datetime.now(zona_colombia).strftime("%H:%M")
-        log.info(f"hora actual: {hora_actual}")
+        fecha_hoy = fecha_actual_colombia()
+        log.info(f"hora actual: {hora_actual} | fecha: {fecha_hoy}")
 
         sql = """
             SELECT id_horario, nombre_loteria, hora_programada
             FROM es_config_horarios
-            WHERE hora_programada <= %s
+            WHERE fecha_sorteo = %s
+              AND hora_programada <= %s
               AND (
                     estado_scraping = %s
                  OR (estado_scraping = %s
@@ -36,7 +38,7 @@ def buscar_loterias_hora_actual(log: object):
         """
 
         interval_param = f"{TIMEOUT_LOCK_MINUTOS} minutes"
-        loterias = ejecutar_query(sql, (hora_actual, ESTADO_PENDIENTE, ESTADO_CORRIENDO_SCRAPING, interval_param))
+        loterias = ejecutar_query(sql, (fecha_hoy, hora_actual, ESTADO_PENDIENTE, ESTADO_CORRIENDO_SCRAPING, interval_param))
         # log.info(f"loterias encontradas: {loterias}")
 
         if not loterias:
