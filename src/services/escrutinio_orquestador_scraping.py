@@ -1,17 +1,9 @@
 import time
 from src.services.db import ejecutar_query
-from src.services.escrutinio_consultas_bd import (
-    insertar_resultado_scraping,
-    actualizar_estado_horario,
-    ESTADO_PENDIENTE,
-    ESTADO_ERROR,
-)
+from src.services.escrutinio_consultas_bd import (insertar_resultado_scraping,actualizar_estado_horario,ESTADO_PENDIENTE,ESTADO_ERROR,)
 from src.services.escrutinio_api import scraping_gane_norte_valle
-from src.services.escrutinio_respaldo_scraping import (
-    recolectar_pool_secundario,
-    filtrar_pool_por_loteria,
-)
-from src.services.utils_scraping import MIN_FUENTES_COINCIDENTES, validar_coincidencias
+from src.services.escrutinio_respaldo_scraping import (recolectar_pool_secundario,filtrar_pool_por_loteria,)
+from src.services.utils_scraping import MIN_FUENTES_COINCIDENTES, validar_coincidencias, normalizar_texto, MAPEO_GENERICO
 from src.services.escrutinio_html import (
     scraping_supergiros,
     scraping_perla_todo,
@@ -134,17 +126,31 @@ def procesar_loterias(loterias: list, log: object):
 
         resultados_finales = []
 
+        # Cache por nombre de lotería: evita re-scrapear si dos id_horario son el mismo sorteo.
+        resultados_ya_resueltos = {}
+
         # PASO 2: procesamos cada lotería encontrada
         for loteria in loterias:
 
             id_horario     = loteria[0]
-            nombre_loteria = loteria[1]
+            # Normaliza el nombre "crudo" de la BD (ej. "DORADO MANANA") al canónico (ej. "Dorado Mañana")
+            nombre_loteria = MAPEO_GENERICO.get(normalizar_texto(loteria[1]), loteria[1])
+
+            if nombre_loteria in resultados_ya_resueltos:
+                resultado_previo = resultados_ya_resueltos[nombre_loteria]
+                if resultado_previo is None:
+                    log.info(f"{nombre_loteria}: sorteo duplicado (id_horario={id_horario}) ya intentado en este ciclo sin éxito, se omite y reintenta en el próximo cron")
+                    actualizar_estado_horario(id_horario, ESTADO_PENDIENTE, log)
+                else:
+                    log.info(f"{nombre_loteria}: sorteo duplicado (id_horario={id_horario}), reutilizando el resultado ya validado en este ciclo en vez de volver a scrapear")
+                    _registrar_resultado(id_horario, nombre_loteria, resultado_previo, log, resultados_finales)
+                continue
 
             # Cada lotería queda aislada: si algo inesperado revienta procesándola (falla técnica
             # real, no "sin consenso de fuentes"), se marca ESTADO_ERROR solo para esa lotería y
             # se sigue con las demás del lote, en vez de tumbar el ciclo completo.
             try:
-                _procesar_una_loteria(id_horario, nombre_loteria, urls, log, resultados_finales)
+                resultados_ya_resueltos[nombre_loteria] = _procesar_una_loteria(id_horario, nombre_loteria, urls, log, resultados_finales)
             except Exception as e:
                 log.error(f"{nombre_loteria}: falla técnica procesando la lotería, se marca estado={ESTADO_ERROR}: {e}")
                 actualizar_estado_horario(id_horario, ESTADO_ERROR, log)
@@ -160,9 +166,34 @@ def procesar_loterias(loterias: list, log: object):
         return None, mensaje_error
 
 
+def _registrar_resultado(id_horario: int, nombre_loteria: str, resultado_validado: dict, log: object, resultados_finales: list):
+    """PASO 5+6: inserta el resultado en la BD y lo agrega a la lista final."""
+    insertado, error_insercion = insertar_resultado_scraping(
+        id_horario = id_horario,
+        numero     = resultado_validado["numero"],
+        quinta     = resultado_validado["quinta"],
+        signo      = resultado_validado.get("signo", ""),
+        serie      = "",
+        log        = log
+    )
+
+    # Si falló la inserción lo registramos pero seguimos con las demás loterías
+    if insertado is None:
+        log.error(f"Error al insertar resultado de {nombre_loteria}: {error_insercion}")
+
+    resultados_finales.append({
+        "id_horario"         : id_horario,
+        "nombre_loteria"     : nombre_loteria,
+        "numero"             : resultado_validado["numero"],
+        "quinta"             : resultado_validado["quinta"],
+        "signo"              : resultado_validado.get("signo", ""),
+        "fuentes"            : resultado_validado["fuentes"],
+        "total_coincidencias": resultado_validado["total_coincidencias"]
+    })
+
+
 def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log: object, resultados_finales: list):
-    """Cuerpo del PASO 2 para una sola lotería, aislado en su propia función para que
-    procesar_loterias pueda envolver cada lotería en su propio try/except (ver arriba)."""
+    """Cuerpo del PASO 2 para una sola lotería. Retorna el resultado_validado (dict) o None."""
     log.info(f"Iniciando scraping para: {nombre_loteria}")
 
     # PASO 3+4/CASO 1: intenta resultado validado (principal+respaldo); si no alcanza el mínimo, reintenta hasta MAX_REINTENTOS_SIN_COINCIDENCIAS veces
@@ -263,7 +294,7 @@ def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log:
         )
         # No es una falla técnica: vuelve a ESTADO_PENDIENTE para que el próximo cron la reintente sola.
         actualizar_estado_horario(id_horario, ESTADO_PENDIENTE, log)
-        return
+        return None
 
     # CASO 2: la quinta y/o el signo no alcanzaron el mínimo de fuentes (0, 1, o 2 sin
     # llegar a las MIN_FUENTES_COINCIDENTES habituales) -> buscamos más fuentes de
@@ -288,28 +319,7 @@ def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log:
         else:
             log.info(f"{nombre_loteria}: tampoco se encontró en el scraping de respaldo para completar quinta/signo")
 
-    # PASO 5: inserta el resultado final (con o sin parche de respaldo) en la BD
-    # (deja estado=ESTADO_SCRAPING_EJECUTADO en es_config_horarios en la misma transacción)
-    insertado, error_insercion = insertar_resultado_scraping(
-        id_horario = id_horario,
-        numero     = resultado_validado["numero"],
-        quinta     = resultado_validado["quinta"],
-        signo      = resultado_validado.get("signo", ""),
-        serie      = "",
-        log        = log
-    )
+    # PASO 5+6: inserta el resultado final (con o sin parche de respaldo) y lo agrega a la lista
+    _registrar_resultado(id_horario, nombre_loteria, resultado_validado, log, resultados_finales)
 
-    # Si falló la inserción lo registramos pero seguimos con las demás loterías
-    if insertado is None:
-        log.error(f"Error al insertar resultado de {nombre_loteria}: {error_insercion}")
-
-    # PASO 6: agregamos el resultado a la lista final
-    resultados_finales.append({
-        "id_horario"         : id_horario,
-        "nombre_loteria"     : nombre_loteria,
-        "numero"             : resultado_validado["numero"],
-        "quinta"             : resultado_validado["quinta"],
-        "signo"              : resultado_validado.get("signo", ""),
-        "fuentes"            : resultado_validado["fuentes"],
-        "total_coincidencias": resultado_validado["total_coincidencias"]
-    })
+    return resultado_validado
