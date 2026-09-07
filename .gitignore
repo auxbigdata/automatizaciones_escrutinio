@@ -16,6 +16,13 @@ resources/Scraping/archivos/*
 resources/Scraping/logs/*
 !resources/Scraping/logs/.gitkeep
 
+#  PROGRAMACION LOTERIAS
+resources/programacion_loterias/archivos/*
+!resources/programacion_loterias/archivos/.gitkeep
+
+resources/programacion_loterias/logs/*
+!resources/programacion_loterias/logs/.gitkeep
+
 # ENTORNO
 .env
 

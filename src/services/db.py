@@ -1,13 +1,13 @@
-import psycopg2  
-from src.settings.entorno import env 
+import psycopg2
+from src.settings.entorno import env
 
 def get_connection():
     return psycopg2.connect(
-        host=env.DB_HOST,      
-        port=env.DB_PORT,      
-        dbname=env.DB_NAME,    
-        user=env.DB_USER,      
-        password=env.DB_PASS   
+        host=env.DB_HOST,
+        port=env.DB_PORT,
+        dbname=env.DB_NAME,
+        user=env.DB_USER,
+        password=env.DB_PASS
     )
 
 

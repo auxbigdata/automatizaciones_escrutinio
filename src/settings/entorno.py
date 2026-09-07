@@ -5,7 +5,10 @@ class Entorno(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8')
     
     ENV: str
-    URL_SGC: str
+    URL_BNET: str
+    URL_HOMEBNET: str
+    USER_BNET: str
+    PASS_BNET: str
     DB_HOST: str
     DB_PORT: int
     DB_NAME: str

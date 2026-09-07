@@ -1,11 +1,8 @@
 import json
 from urllib.parse import urlparse
 from urllib.robotparser import RobotFileParser
-
 from playwright.sync_api import Page
-
 from src.services.db import ejecutar_query
-
 from src.services.parsers_json import obtener_parser_json
 from src.services.parsers_html import obtener_parser_html
 from src.services.parsers_spa import obtener_parser_spa
