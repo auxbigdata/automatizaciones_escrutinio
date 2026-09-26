@@ -3,7 +3,7 @@ from src.services.db import ejecutar_query
 from src.services.escrutinio_consultas_bd import (insertar_resultado_scraping,actualizar_estado_horario,ESTADO_PENDIENTE,ESTADO_ERROR,)
 from src.services.escrutinio_api import scraping_gane_norte_valle
 from src.services.escrutinio_respaldo_scraping import (recolectar_pool_secundario,filtrar_pool_por_loteria,)
-from src.services.utils_scraping import MIN_FUENTES_COINCIDENTES, validar_coincidencias, normalizar_texto, MAPEO_GENERICO
+from src.services.utils_scraping import MIN_FUENTES_COINCIDENTES, validar_coincidencias, normalizar_texto, MAPEO_GENERICO, COD_PROCESO_LOTERIA
 from src.services.escrutinio_html import (
     scraping_supergiros,
     scraping_perla_todo,
@@ -20,6 +20,14 @@ from src.services.escrutinio_html import (
 
 # Reintentos del ciclo completo (principal + respaldo) antes de omitir la lotería y esperar al próximo cron
 MAX_REINTENTOS_SIN_COINCIDENCIAS = 3
+
+
+def _numero_tiene_consenso(resultados_acumulados: list) -> bool:
+    """True si algún número ya fue traído por al menos MIN_FUENTES_COINCIDENTES fuentes."""
+    conteo = {}
+    for r in resultados_acumulados:
+        conteo[r["numero"]] = conteo.get(r["numero"], 0) + 1
+    return any(cantidad >= MIN_FUENTES_COINCIDENTES for cantidad in conteo.values())
 
 
 def obtener_urls_scraping(log: object):
@@ -133,8 +141,10 @@ def procesar_loterias(loterias: list, log: object):
         for loteria in loterias:
 
             id_horario     = loteria[0]
-            # Normaliza el nombre "crudo" de la BD (ej. "DORADO MANANA") al canónico (ej. "Dorado Mañana")
-            nombre_loteria = MAPEO_GENERICO.get(normalizar_texto(loteria[1]), loteria[1])
+            cod_proceso    = loteria[3]
+            # cod_proceso es el identificador confiable (no cambia si escriben mal el nombre).
+            # Si no está catalogado (sorteo nuevo), se cae de vuelta al nombre normalizado.
+            nombre_loteria = COD_PROCESO_LOTERIA.get(cod_proceso) or MAPEO_GENERICO.get(normalizar_texto(loteria[1]), loteria[1])
 
             if nombre_loteria in resultados_ya_resueltos:
                 resultado_previo = resultados_ya_resueltos[nombre_loteria]
@@ -177,6 +187,11 @@ def _registrar_resultado(id_horario: int, nombre_loteria: str, resultado_validad
         log        = log
     )
 
+    # Otro proceso en paralelo ya resolvió este id_horario (timeout de lock + reintento
+    # cruzado): no se agrega a resultados_finales para no notificar el mismo resultado 2 veces.
+    if insertado is False:
+        return
+
     # Si falló la inserción lo registramos pero seguimos con las demás loterías
     if insertado is None:
         log.error(f"Error al insertar resultado de {nombre_loteria}: {error_insercion}")
@@ -198,6 +213,7 @@ def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log:
 
     # PASO 3+4/CASO 1: intenta resultado validado (principal+respaldo); si no alcanza el mínimo, reintenta hasta MAX_REINTENTOS_SIN_COINCIDENCIAS veces
     resultado_validado = None
+    error_validacion   = None
 
     # Este set vive fuera del for de reintentos: así, si el scraping
     # principal validó algo pero el CASO 2 necesita volver a llamar
@@ -235,6 +251,24 @@ def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log:
                 })
                 log.info(f"Fuentes acumuladas hasta ahora: {len(resultados_acumulados)}")
 
+                # CORTE TEMPRANO: apenas el número llega a MIN_FUENTES_COINCIDENTES no
+                # tiene sentido seguir consultando fuentes. Si además la quinta/signo ya
+                # tienen su consenso, se inserta "de una vez"; si alguno queda pendiente
+                # se dejan correr las fuentes que falten de esta ronda (pueden completarlo)
+                # y, si no, el CASO 2 buscará respaldo más abajo.
+                if _numero_tiene_consenso(resultados_acumulados):
+                    validado_parcial, _ = validar_coincidencias(resultados_acumulados, log)
+                    if (validado_parcial is not None
+                            and not validado_parcial.get("quinta_pendiente")
+                            and not validado_parcial.get("signo_pendiente")):
+                        log.info(
+                            f"{nombre_loteria}: número y quinta/signo ya tienen consenso "
+                            f"({MIN_FUENTES_COINCIDENTES}+ fuentes), se corta el scraping sin "
+                            f"consultar las fuentes restantes"
+                        )
+                        resultado_validado = validado_parcial
+                        break
+
         urls_ya_usadas_para_esta_loteria = set()
 
         for r in resultados_acumulados:
@@ -244,11 +278,12 @@ def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log:
                     urls_ya_usadas_para_esta_loteria.add(url_data[2])
                     break
 
-        # Validamos número, quinta y signo
-        resultado_validado, error_validacion = validar_coincidencias(
-            resultados_acumulados,
-            log
-        )
+        # Validamos número, quinta y signo (si el corte temprano ya lo resolvió, no revalidamos)
+        if resultado_validado is None:
+            resultado_validado, error_validacion = validar_coincidencias(
+                resultados_acumulados,
+                log
+            )
 
         # CASO 1: si el principal no validó (número o quinta/signo sin llegar al mínimo),
         # se dispara el scraping de respaldo para esta lotería y sus fuentes se SUMAN

@@ -11,18 +11,19 @@ def get_connection():
     )
 
 
-def ejecutar_query(sql, params=None):
+def ejecutar_query(sql, params=None, devolver_rowcount=False):
     conn = get_connection()  # Abre una conexión nueva para este query
-    try: 
+    try:
         with conn.cursor()as cur:
             cur.execute(sql, params or ())  # Ejecuta la consulta SQL con los parámetros proporcionados
             if cur.description:
                 return cur.fetchall()  # Devuelve los resultados si la consulta devuelve filas
-            
+
             # si no hay cur.description fue un insert, update o delete
+            filas_afectadas = cur.rowcount
             conn.commit()  # Confirma los cambios en la base de datos
-            return None  # Devuelve None si no hay resultados
-        
+            return filas_afectadas if devolver_rowcount else None
+
 
     finally:
         conn.close()  # Cierra la conexión
