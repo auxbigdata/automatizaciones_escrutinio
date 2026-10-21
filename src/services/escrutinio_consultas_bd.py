@@ -3,7 +3,7 @@ import pytz
 import json
 import requests
 from datetime import datetime
-from src.services.db import ejecutar_query, ejecutar_transaccion
+from src.services.db import ejecutar_query
 from src.services.servicios_email import fecha_actual_colombia
 
 # 0=Pendiente, 1=Corriendo Scraping, 2=Scraping Ejecutado, 3=Finalizado Total, 4=Error
@@ -15,7 +15,7 @@ ESTADO_ERROR              = 4
 # Si una lotería lleva más de este tiempo en ESTADO_CORRIENDO_SCRAPING, se asume que el
 # proceso que la tomó murió sin liberarla (kill -9, caída del servidor, etc.) y se vuelve
 # a ofrecer al siguiente cron en vez de quedar bloqueada para siempre.
-TIMEOUT_LOCK_MINUTOS = 15
+TIMEOUT_LOCK_MINUTOS = 30
 
 # El scraping solo busca sorteos que ya quedaron programados en las dos plataformas:
 # estado_programacion (BNET) = 3 y programacion_superx (Superflex) = 3
@@ -31,7 +31,7 @@ def buscar_loterias_hora_actual(log: object):
         log.info(f"hora actual: {hora_actual} | fecha: {fecha_hoy}")
 
         sql = """
-            SELECT id_horario, nombre_loteria, hora_programada
+            SELECT id_horario, nombre_loteria, hora_programada, cod_proceso
             FROM es_config_horarios
             WHERE fecha_sorteo = %s
               AND hora_programada <= %s
@@ -91,6 +91,18 @@ def actualizar_estado_horario(id_horario: int, estado: int, log: object):
 
 def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,serie:str,log: object, ids_scraping: list = None):
     try:
+        # Reclamo atómico: si el timeout de 15 min liberó este id_horario y otro proceso en
+        # paralelo ya lo dejó en ESTADO_SCRAPING_EJECUTADO, no insertamos un resultado duplicado.
+        filas_afectadas = ejecutar_query(
+            "UPDATE es_config_horarios SET estado_scraping = %s WHERE id_horario = %s AND estado_scraping <> %s",
+            (ESTADO_SCRAPING_EJECUTADO, id_horario, ESTADO_SCRAPING_EJECUTADO),
+            devolver_rowcount=True
+        )
+
+        if not filas_afectadas:
+            log.info(f"id_horario={id_horario} ya fue resuelto por otro proceso en paralelo, se omite el resultado duplicado")
+            return False, "ya_procesado_por_otro_proceso"
+
         log.info(f"Insertando resultado en es_resultados_loterias para id_horario: {id_horario}")
 
         # construimos el JSON
@@ -105,22 +117,14 @@ def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,
         # la columna ids_scraping es texto: la lista [4, 5, 9] se guarda como "4,5,9"
         ids_scraping = ",".join(str(id_origen) for id_origen in ids_scraping) if ids_scraping else None
 
-        queries =[
-            (
-                """
-                INSERT INTO es_resultados_loterias (id_horario, numero_ganador, fecha_sys, ids_scraping)
-                VALUES (%s, %s, %s, %s)
-                """,
-                (id_horario, numero_ganador, fecha_hoy, ids_scraping)
-            ),
-            (
-                f"UPDATE es_config_horarios SET estado_scraping = {ESTADO_SCRAPING_EJECUTADO} WHERE id_horario = %s",
-                (id_horario,)
-
-            ),
-        ]
-
-        ejecutar_transaccion(queries)
+# El estado_scraping ya quedó en ESTADO_SCRAPING_EJECUTADO con el reclamo de arriba
+        ejecutar_query(
+            """
+            INSERT INTO es_resultados_loterias (id_horario, numero_ganador, fecha_sys, ids_scraping)
+            VALUES (%s, %s, %s, %s)
+            """,
+            (id_horario, numero_ganador, fecha_hoy, ids_scraping)
+        )
 
         log.info(f"Resultado insertado correctamente | id_horario={id_horario} | numero_ganador={numero_ganador} | ids_scraping={ids_scraping}")
         return True, None

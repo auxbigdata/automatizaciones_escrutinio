@@ -194,6 +194,46 @@ MAPEO_GENERICO = {
 
 
 # ==========================================================
+# MAPEO POR cod_proceso (es_config_horarios.cod_proceso -> nombre canónico)
+# Identificador más confiable que nombre_loteria: no cambia si escriben mal
+# el nombre o lo renombran. Se usa como primera opción; si el cod_proceso no
+# está acá (sorteo nuevo), se cae de vuelta a MAPEO_GENERICO por nombre.
+# ==========================================================
+COD_PROCESO_LOTERIA = {
+    2:  "Lotería Tolima",
+    4:  "Lotería Cruz Roja",
+    5:  "Lotería Huila",
+    7:  "Lotería Meta",
+    15: "Lotería Manizales",
+    17: "Lotería Valle",
+    21: "Chontico Millonario",
+    22: "Dorado Tarde",
+    27: "Paisita Uno",
+    28: "Cafeterito Día",
+    29: "Paisita Dos",
+    30: "Cafeterito Noche",
+    33: "El Pijao de Oro",
+    43: "Dorado Mañana",
+    48: "Chontico Noche",
+    50: "Astro Sol",
+    51: "Astro Luna",
+    69: "El Samán de la Suerte",
+    70: "Sinuano Día",
+    71: "Sinuano Noche",
+    72: "Culona Día",
+    73: "Culona Noche",
+    85: "Caribeña Día",
+    86: "Caribeña Noche",
+    87: "Fantástica Día",
+    88: "Fantástica Noche",
+    89: "Motilón Tarde",
+    90: "Motilón Noche",
+    91: "Antioqueñita Uno",
+    92: "Antioqueñita Dos",
+}
+
+
+# ==========================================================
 # MAPEO DE SIGNOS ZODIACALES (Astro Sol / Astro Luna)
 # Sinónimos de signos (ej. Escorpio/Escorpión); claves ya pasadas por normalizar_texto()
 # ==========================================================
