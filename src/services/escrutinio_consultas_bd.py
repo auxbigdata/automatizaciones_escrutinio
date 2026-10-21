@@ -1,3 +1,4 @@
+import os
 import pytz
 import json
 import requests
@@ -16,6 +17,10 @@ ESTADO_ERROR              = 4
 # a ofrecer al siguiente cron en vez de quedar bloqueada para siempre.
 TIMEOUT_LOCK_MINUTOS = 30
 
+# El scraping solo busca sorteos que ya quedaron programados en las dos plataformas:
+# estado_programacion (BNET) = 3 y programacion_superx (Superflex) = 3
+ESTADO_PROGRAMACION_FINALIZADA = 3
+
 
 def buscar_loterias_hora_actual(log: object):
     try:
@@ -30,6 +35,8 @@ def buscar_loterias_hora_actual(log: object):
             FROM es_config_horarios
             WHERE fecha_sorteo = %s
               AND hora_programada <= %s
+              AND estado_programacion = %s
+              AND programacion_superx = %s
               AND (
                     estado_scraping = %s
                  OR (estado_scraping = %s
@@ -38,7 +45,7 @@ def buscar_loterias_hora_actual(log: object):
         """
 
         interval_param = f"{TIMEOUT_LOCK_MINUTOS} minutes"
-        loterias = ejecutar_query(sql, (fecha_hoy, hora_actual, ESTADO_PENDIENTE, ESTADO_CORRIENDO_SCRAPING, interval_param))
+        loterias = ejecutar_query(sql, (fecha_hoy, hora_actual, ESTADO_PROGRAMACION_FINALIZADA, ESTADO_PROGRAMACION_FINALIZADA, ESTADO_PENDIENTE, ESTADO_CORRIENDO_SCRAPING, interval_param))
         # log.info(f"loterias encontradas: {loterias}")
 
         if not loterias:
@@ -80,12 +87,9 @@ def actualizar_estado_horario(id_horario: int, estado: int, log: object):
         mensaje_error = f"Error al actualizar estado_scraping de id_horario={id_horario} a estado={estado}: {e}"
         log.error(mensaje_error)
         return None, mensaje_error
-    
 
 
-
-
-def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,serie:str,log: object):
+def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,serie:str,log: object, ids_scraping: list = None):
     try:
         # Reclamo atómico: si el timeout de 15 min liberó este id_horario y otro proceso en
         # paralelo ya lo dejó en ESTADO_SCRAPING_EJECUTADO, no insertamos un resultado duplicado.
@@ -110,23 +114,72 @@ def insertar_resultado_scraping(id_horario: int,numero:str,quinta:str,signo:str,
         }, ensure_ascii=False)
 
         fecha_hoy = fecha_actual_colombia()
+        # la columna ids_scraping es texto: la lista [4, 5, 9] se guarda como "4,5,9"
+        ids_scraping = ",".join(str(id_origen) for id_origen in ids_scraping) if ids_scraping else None
 
-        # El estado_scraping ya quedó en ESTADO_SCRAPING_EJECUTADO con el reclamo de arriba
+# El estado_scraping ya quedó en ESTADO_SCRAPING_EJECUTADO con el reclamo de arriba
         ejecutar_query(
             """
-            INSERT INTO es_resultados_loterias (id_horario, numero_ganador, fecha_sys)
-            VALUES (%s, %s, %s)
+            INSERT INTO es_resultados_loterias (id_horario, numero_ganador, fecha_sys, ids_scraping)
+            VALUES (%s, %s, %s, %s)
             """,
-            (id_horario, numero_ganador, fecha_hoy)
+            (id_horario, numero_ganador, fecha_hoy, ids_scraping)
         )
 
-        log.info(f"Resultado insertado correctamente | id_horario={id_horario} | numero_ganador={numero_ganador}")
+        log.info(f"Resultado insertado correctamente | id_horario={id_horario} | numero_ganador={numero_ganador} | ids_scraping={ids_scraping}")
         return True, None
 
     except Exception as e:
         mensaje_error = f"Error al insertar resultado en es_resultados_loterias: {e}"
         log.error(mensaje_error)
         return None, mensaje_error
+
+
+def consultar_loterias_por_programar(ruta_archivos, log=object):
+    try:
+        # estado_programacion = estado en BNET, programacion_superx = estado en Superflex
+        log.info("consultando loterias por programar (estado_programacion = 0 o programacion_superx = 0)")
+        sql = """
+            SELECT id_horario, nombre_loteria, cod_proceso, hora_programada, hora_cierre, fecha_sorteo, estado_programacion, programacion_superx
+            FROM es_config_horarios
+            WHERE estado_programacion = 0 OR programacion_superx = 0
+            ORDER BY hora_programada
+        """
+        filas = ejecutar_query(sql)
+
+        if not filas:
+            mensaje = "no hay loterias con estado_programacion = 0 ni programacion_superx = 0"
+            log.info(mensaje)
+            return [], mensaje
+
+        loterias = []
+        loterias_json = []
+        for id_horario, nombre_loteria, cod_proceso, hora_programada, hora_cierre, fecha_sorteo, estado_programacion, programacion_superx in filas:
+            datos = {
+                "nombre_loteria": nombre_loteria,
+                "cod_proceso": cod_proceso,
+                "hora_programada": hora_programada.strftime("%H:%M:%S"),
+                # hora_cierre puede venir NULL en la tabla; en ese caso va None y en BNET no se toca
+                "hora_cierre": hora_cierre.strftime("%H:%M:%S") if hora_cierre else None,
+                "fecha_sorteo": fecha_sorteo.strftime("%d/%m/%Y"),
+                "estado_programacion": estado_programacion,
+                "programacion_superx": programacion_superx,
+            }
+            loterias_json.append(datos)
+            # en memoria si necesitamos el id_horario para el UPDATE; en el json no va
+            loterias.append({"id_horario": id_horario, **datos})
+
+        ruta_json = os.path.join(ruta_archivos, "loterias_por_programar.json")
+        with open(ruta_json, "w", encoding="utf-8") as archivo:
+            json.dump(loterias_json, archivo, ensure_ascii=False, indent=4)
+
+        log.info(f"{len(loterias)} loterias guardadas en {ruta_json}")
+        return loterias, None
+
+    except Exception as e:
+        mensaje = f"Ocurrio un error al consultar las loterias por programar: {e}"
+        log.error(mensaje)
+        return None, mensaje
 
 
 

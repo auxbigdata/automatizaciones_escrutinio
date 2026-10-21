@@ -56,7 +56,6 @@ def obtener_urls_scraping(log: object):
         log.error(mensaje_error)
         return None, mensaje_error
 
-
 def ejecutar_scraping_por_url(nombre_loteria: str, nombre_fuente: str, url: str, log: object):
     """Llama la función de scraping según nombre_fuente (para una nueva fuente, agregar su elif aquí). Retorna (dict, None) o (None, mensaje)."""
     try:
@@ -115,7 +114,6 @@ def ejecutar_scraping_por_url(nombre_loteria: str, nombre_fuente: str, url: str,
         log.error(mensaje_error)
         return None, mensaje_error
 
-
 def procesar_loterias(loterias: list, log: object):
     """Orquesta scraping y validación completa para cada lotería en `loterias`.
 
@@ -153,7 +151,7 @@ def procesar_loterias(loterias: list, log: object):
                     actualizar_estado_horario(id_horario, ESTADO_PENDIENTE, log)
                 else:
                     log.info(f"{nombre_loteria}: sorteo duplicado (id_horario={id_horario}), reutilizando el resultado ya validado en este ciclo en vez de volver a scrapear")
-                    _registrar_resultado(id_horario, nombre_loteria, resultado_previo, log, resultados_finales)
+                    _registrar_resultado(id_horario, nombre_loteria, resultado_previo, log, resultados_finales, urls)
                 continue
 
             # Cada lotería queda aislada: si algo inesperado revienta procesándola (falla técnica
@@ -175,8 +173,23 @@ def procesar_loterias(loterias: list, log: object):
         log.error(mensaje_error)
         return None, mensaje_error
 
+def origenes_fuentes(fuentes: list, urls: list, log:object)-> list:
+    """Traduce las fuentes que coincidieron al id de es_origenes_scraping (el principal las trae por nombre, el respaldo por URL)."""
+    ids = []
+    for fuente in fuentes:
+        id_encontrado = None
+        for url_data in urls:
+            # url_data = (id, nombre_loteria, url, tipo) de es_origenes_scraping
+            if fuente == url_data[1] or fuente == url_data[2]:
+                id_encontrado = url_data[0]
+                break
+        if id_encontrado is None:
+            log.error(f"No se encontro en es_origenes_scraping el id de la fuente: {fuente}")
+        elif id_encontrado not in ids:
+            ids.append(id_encontrado)
+    return ids
 
-def _registrar_resultado(id_horario: int, nombre_loteria: str, resultado_validado: dict, log: object, resultados_finales: list):
+def _registrar_resultado(id_horario: int, nombre_loteria: str, resultado_validado: dict, log: object, resultados_finales: list, urls):
     """PASO 5+6: inserta el resultado en la BD y lo agrega a la lista final."""
     insertado, error_insercion = insertar_resultado_scraping(
         id_horario = id_horario,
@@ -184,6 +197,7 @@ def _registrar_resultado(id_horario: int, nombre_loteria: str, resultado_validad
         quinta     = resultado_validado["quinta"],
         signo      = resultado_validado.get("signo", ""),
         serie      = "",
+        ids_scraping = origenes_fuentes(resultado_validado["fuentes"], urls, log),
         log        = log
     )
 
@@ -205,7 +219,6 @@ def _registrar_resultado(id_horario: int, nombre_loteria: str, resultado_validad
         "fuentes"            : resultado_validado["fuentes"],
         "total_coincidencias": resultado_validado["total_coincidencias"]
     })
-
 
 def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log: object, resultados_finales: list):
     """Cuerpo del PASO 2 para una sola lotería. Retorna el resultado_validado (dict) o None."""
@@ -355,6 +368,6 @@ def _procesar_una_loteria(id_horario: int, nombre_loteria: str, urls: list, log:
             log.info(f"{nombre_loteria}: tampoco se encontró en el scraping de respaldo para completar quinta/signo")
 
     # PASO 5+6: inserta el resultado final (con o sin parche de respaldo) y lo agrega a la lista
-    _registrar_resultado(id_horario, nombre_loteria, resultado_validado, log, resultados_finales)
+    _registrar_resultado(id_horario, nombre_loteria, resultado_validado, log, resultados_finales, urls)
 
     return resultado_validado
