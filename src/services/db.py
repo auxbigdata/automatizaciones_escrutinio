@@ -7,7 +7,8 @@ def get_connection():
         port=env.DB_PORT,
         dbname=env.DB_NAME,
         user=env.DB_USER,
-        password=env.DB_PASS
+        password=env.DB_PASS,
+        connect_timeout=10  # si la BD no responde en 10 segundos falla en vez de quedarse colgado
     )
 
 

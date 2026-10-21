@@ -140,7 +140,7 @@ def enviar_email(destinatario: str, mensaje: str, asunto: str, titulo_mensaje: s
                     filename=os.path.basename(ruta)
                 )
 
-    smtp = smtplib.SMTP("10.1.1.1", 587)
+    smtp = smtplib.SMTP("10.1.1.1", 587, timeout=30)  # si el servidor de correo no responde en 30 segundos falla en vez de quedarse colgado
     smtp.login(remitente, password)
     smtp.send_message(msg)
     smtp.quit()

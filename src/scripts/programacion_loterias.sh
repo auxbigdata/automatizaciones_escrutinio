@@ -33,6 +33,15 @@ PYTHON_BIN="$PROJECT_DIR/env/bin/python3"
 # por falta de display; los pantallazos de error se toman igual en ese caso.
 cd "$PROJECT_DIR"
 
+# Candado: si el cron lanza el robot mientras otra ejecución sigue corriendo, la segunda
+# se omite. Así no se programa dos veces la misma lotería (Superflex guarda cada vez un registro nuevo).
+# El candado se suelta solo cuando termina la ejecución, aunque el robot se caiga.
+exec 9>"/tmp/programacion_loterias_$(whoami).lock"
+if ! flock -n 9; then
+    echo "Ya hay una ejecución de programacion_loterias corriendo, se omite esta"
+    exit 0
+fi
+
 MI_DISPLAY=$(ps -u "$(whoami)" -o cmd= | grep -oP 'Xorg :\K[0-9]+' | head -1)
 
 if [ -n "$MI_DISPLAY" ] && DISPLAY=":${MI_DISPLAY}.0" xdpyinfo >/dev/null 2>&1; then

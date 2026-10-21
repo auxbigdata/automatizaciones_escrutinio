@@ -9,6 +9,10 @@ class Entorno(BaseSettings):
     URL_HOMEBNET: str
     USER_BNET: str
     PASS_BNET: str
+    URL_SUPERFLEX: str
+    URL_SUPERFLEX_HOME: str
+    USER_SUPERFLEX: int
+    PASS_SUPERFLEX: int
     DB_HOST: str
     DB_PORT: int
     DB_NAME: str

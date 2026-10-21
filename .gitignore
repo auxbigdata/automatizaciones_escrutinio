@@ -16,12 +16,20 @@ resources/Scraping/archivos/*
 resources/Scraping/logs/*
 !resources/Scraping/logs/.gitkeep
 
-#  PROGRAMACION LOTERIAS
+#  PROGRAMACION LOTERIAS BNET
 resources/programacion_loterias/archivos/*
 !resources/programacion_loterias/archivos/.gitkeep
 
 resources/programacion_loterias/logs/*
 !resources/programacion_loterias/logs/.gitkeep
+
+
+# PROGRAMACION LOTERIAS SUPERFLEX
+resources/programacion_loterias_superflex/archivos/*
+!resources/programacion_loterias_superflex/archivos/.gitkeep
+
+resources/programacion_loterias_superflex/logs/*
+!resources/programacion_loterias_superflex/logs/.gitkeep
 
 # ENTORNO
 .env

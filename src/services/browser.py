@@ -1,6 +1,23 @@
 from playwright.sync_api import sync_playwright
 import subprocess
 import time
+import os
+from datetime import datetime
+
+
+# rutas de las capturas tomadas en esta ejecucion, para adjuntarlas al correo de error
+CAPTURAS = []
+def tomar_captura(page, nombre, ruta_archivos, log):
+    """Toma una captura de lo visible en la pagina en el momento del error y la guarda en la carpeta del dia."""
+    try:
+        carpeta = os.path.join(ruta_archivos, datetime.now().strftime("%Y-%m-%d"))
+        os.makedirs(carpeta, exist_ok=True)
+        ruta = os.path.join(carpeta, f"{datetime.now().strftime('%H-%M-%S')}_{nombre.replace(' ', '_')}.png")
+        page.screenshot(path=ruta)
+        CAPTURAS.append(ruta)
+        log.info(f"captura del error guardada en: {ruta}")
+    except Exception as e:
+        log.error(f"no se pudo tomar la captura {nombre}: {e}")
 
 def open_browser(headless=True, workspace=None, log=None):
     """
